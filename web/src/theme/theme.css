@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+/* Color values below are pulled directly from the generated Figma Make source
+   for this design (not estimated) — keep in sync if the Figma file changes. */
+:root,
+[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --text: #111111;
+  --text-muted: #888888;
+  --text-faint: #aaaaaa;
+  --border: #ebebeb;
+  --chip-border: #e0e0e0;
+
+  --placeholder-bg: #e8e8e8;
+  --placeholder-border: #c0c0c0;
+  --placeholder-icon: #b0b0b0;
+  --placeholder-label: #b8b8b8;
+  --placeholder-size: #cccccc;
+
+  --accent-red: #fe0000;
+  --radius-card: 1rem;
+  --shadow-elevated: 0 2px 12px rgba(0, 0, 0, 0.08);
+
+  /* Sections that are always dark (hero overlay, promo banner, footer) regardless of site theme */
+  --dark-surface: #111111;
+  --dark-surface-text: #ffffff;
+}
+
+[data-theme='dark'] {
+  --bg: #0a0a0a;
+  --bg-secondary: #161616;
+  --text: #ffffff;
+  --text-muted: #9a9a9a;
+  --text-faint: #7a7a7a;
+  --border: #262626;
+  --chip-border: #333333;
+
+  --placeholder-bg: #262626;
+  --placeholder-border: #3d3d3d;
+  --placeholder-icon: #555555;
+  --placeholder-label: #6a6a6a;
+  --placeholder-size: #4d4d4d;
+
+  --accent-red: #fe0000;
+  --radius-card: 1rem;
+  --shadow-elevated: 0 2px 16px rgba(0, 0, 0, 0.45);
+
+  --dark-surface: #000000;
+  --dark-surface-text: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.rk-heading {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+  line-height: 0.9;
+}
+
+.rk-eyebrow {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.rk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.875rem 2.25rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.rk-btn:hover {
+  transform: scale(1.05);
+}
+
+.rk-btn:active {
+  transform: scale(0.95);
+}
+
+.rk-logo-img {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent-red);
+  outline-offset: 2px;
+}
