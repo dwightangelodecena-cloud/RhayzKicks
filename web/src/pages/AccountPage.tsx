@@ -8,8 +8,51 @@ function formatPeso(amount: number) {
   return `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+interface OrderRow {
+  id: string
+  orderNumber: string
+  date: string
+  total: number
+  status: string
+  source: 'In-Store' | 'Online'
+}
+
+const statusLabel: Record<string, string> = {
+  completed: 'Completed',
+  refunded: 'Refunded',
+  voided: 'Voided',
+  pending: 'Pending Payment',
+  paid: 'Paid',
+  cancelled: 'Cancelled',
+  fulfilled: 'Fulfilled',
+}
+
 export default function AccountPage() {
   const { checkingSession, isAuthenticated, user, customer, refreshCustomer } = useAuth()
+
+  const [orders, setOrders] = useState<OrderRow[]>([])
+  const [ordersLoading, setOrdersLoading] = useState(true)
+
+  useEffect(() => {
+    if (!customer) return
+    let cancelled = false
+    ;(async () => {
+      const [salesRes, onlineRes] = await Promise.all([
+        supabase.from('sales').select('id, order_number, sale_date, total, status').eq('customer_id', customer.id).order('sale_date', { ascending: false }).limit(20),
+        supabase.from('online_orders').select('id, order_number, created_at, total, status').eq('customer_id', customer.id).order('created_at', { ascending: false }).limit(20),
+      ])
+      if (cancelled) return
+      const combined: OrderRow[] = [
+        ...(salesRes.data ?? []).map((s) => ({ id: s.id, orderNumber: s.order_number, date: s.sale_date, total: Number(s.total), status: s.status, source: 'In-Store' as const })),
+        ...(onlineRes.data ?? []).map((o) => ({ id: o.id, orderNumber: o.order_number, date: o.created_at, total: Number(o.total), status: o.status, source: 'Online' as const })),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      setOrders(combined)
+      setOrdersLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [customer])
 
   const [profileForm, setProfileForm] = useState({ fullName: '', phone: '' })
   const [addressForm, setAddressForm] = useState({ street: '', city: '', province: '', zipCode: '' })
@@ -183,6 +226,68 @@ export default function AccountPage() {
           font-size: 0.75rem;
           color: var(--text-muted);
         }
+        .rk-account-orders {
+          display: flex;
+          flex-direction: column;
+          gap: 0.625rem;
+        }
+        .rk-account-order-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          background: var(--bg-secondary);
+          border-radius: 0.75rem;
+          padding: 0.75rem 1rem;
+        }
+        .rk-account-order-number {
+          font-weight: 800;
+          font-size: 0.875rem;
+          color: var(--text);
+        }
+        .rk-account-order-meta {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          margin-top: 0.125rem;
+        }
+        .rk-account-order-right {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          flex-shrink: 0;
+        }
+        .rk-account-order-total {
+          font-weight: 800;
+          font-size: 0.875rem;
+          color: var(--text);
+        }
+        .rk-account-order-badge {
+          font-size: 9px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          padding: 0.25rem 0.5rem;
+          border-radius: 999px;
+          white-space: nowrap;
+          background: var(--bg);
+          color: var(--text-muted);
+        }
+        .rk-account-order-badge-completed,
+        .rk-account-order-badge-paid,
+        .rk-account-order-badge-fulfilled {
+          background: rgba(12, 163, 12, 0.12);
+          color: #0ca30c;
+        }
+        .rk-account-order-badge-pending {
+          background: rgba(250, 178, 25, 0.16);
+          color: #8a5a00;
+        }
+        .rk-account-order-badge-refunded,
+        .rk-account-order-badge-voided,
+        .rk-account-order-badge-cancelled {
+          background: rgba(254, 0, 0, 0.08);
+          color: var(--accent-red);
+        }
         .rk-account-signout {
           background: none;
           border: 1px solid var(--border);
@@ -255,6 +360,31 @@ export default function AccountPage() {
             </button>
             {addressMessage && <span className="rk-account-message">{addressMessage}</span>}
           </div>
+        </div>
+
+        <div className="rk-account-card">
+          <h2 className="rk-account-card-title">My Orders</h2>
+          <p className="rk-account-card-desc">Purchases made online or in-store.</p>
+          {ordersLoading ? (
+            <p className="rk-account-message">Loading…</p>
+          ) : orders.length === 0 ? (
+            <p className="rk-account-message">No orders yet.</p>
+          ) : (
+            <div className="rk-account-orders">
+              {orders.map((o) => (
+                <div key={`${o.source}-${o.id}`} className="rk-account-order-row">
+                  <div>
+                    <div className="rk-account-order-number">{o.orderNumber}</div>
+                    <div className="rk-account-order-meta">{o.source} · {new Date(o.date).toLocaleDateString()}</div>
+                  </div>
+                  <div className="rk-account-order-right">
+                    <span className="rk-account-order-total">{formatPeso(o.total)}</span>
+                    <span className={`rk-account-order-badge rk-account-order-badge-${o.status}`}>{statusLabel[o.status] ?? o.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rk-account-card">

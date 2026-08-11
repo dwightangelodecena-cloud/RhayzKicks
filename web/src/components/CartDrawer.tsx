@@ -6,6 +6,7 @@ import ImgSlot from './ImgSlot'
 import { useShop } from '../context/ShopContext'
 import { useAuth } from '../context/AuthContext'
 import { formatPeso } from '../data/catalog'
+import { supabase } from '../supabase'
 
 function BagIcon() {
   return (
@@ -21,15 +22,42 @@ export default function CartDrawer() {
   const { isCartOpen, closeDrawers, cart, setQty, removeFromCart, cartSubtotal } = useShop()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  const [checkoutMsg, setCheckoutMsg] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
-  const checkout = () => {
+  const checkout = async () => {
     if (!isAuthenticated) {
       closeDrawers()
       navigate('/join', { state: { from: '/' } })
       return
     }
-    setCheckoutMsg(true)
+    setCheckingOut(true)
+    setCheckoutError(null)
+    const { data: sessionData } = await supabase.auth.getSession()
+    if (!sessionData.session) {
+      setCheckoutError('Your session expired — please sign in again.')
+      setCheckingOut(false)
+      return
+    }
+    const { data, error } = await supabase.functions.invoke('create-paymongo-checkout', {
+      body: {
+        lines: cart.map((l) => ({ itemId: l.product.id, size: l.size ?? '', color: l.colorway ?? '', quantity: l.qty })),
+      },
+      headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+    })
+    if (error) {
+      const context = (error as { context?: Response }).context
+      const bodyMessage = context ? await context.clone().json().then((b) => b?.error).catch(() => null) : null
+      setCheckoutError(bodyMessage ?? error.message)
+      setCheckingOut(false)
+      return
+    }
+    if (data?.error) {
+      setCheckoutError(data.error)
+      setCheckingOut(false)
+      return
+    }
+    window.location.href = data.checkoutUrl
   }
 
   return (
@@ -71,19 +99,28 @@ export default function CartDrawer() {
                 color: var(--text-muted);
                 text-align: center;
               }
+              .rk-cart-checkout:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+              }
+              .rk-cart-error {
+                font-size: 0.75rem;
+                color: var(--accent-red);
+                text-align: center;
+              }
             `}</style>
             <div className="rk-cart-subtotal-row">
               <span>Subtotal</span>
               <span>{formatPeso(cartSubtotal)}</span>
             </div>
-            <button className="rk-cart-checkout" onClick={checkout}>
-              Checkout
+            <button className="rk-cart-checkout" onClick={checkout} disabled={checkingOut}>
+              {checkingOut ? 'Redirecting to payment…' : 'Checkout'}
             </button>
-            <p className="rk-cart-note">
-              {checkoutMsg
-                ? 'Checkout isn’t live yet — head in-store or watch for our next release.'
-                : 'Checkout happens in-store or on our next release — this app is browsing only for now.'}
-            </p>
+            {checkoutError ? (
+              <p className="rk-cart-error">{checkoutError}</p>
+            ) : (
+              <p className="rk-cart-note">Pay securely with GCash, GrabPay, or card via PayMongo.</p>
+            )}
           </div>
         ) : undefined
       }

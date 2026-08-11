@@ -274,3 +274,43 @@ export interface StaffShift {
 export interface StaffShiftDetail extends StaffShift {
   staffName: string;
 }
+
+// Online checkout (PayMongo). See supabase/011_online_orders.sql / SCHEMA.md.
+// Separate lifecycle from Sale/SoldItem — a POS sale is always instantly
+// completed by a staff member, an online order goes pending -> paid ->
+// fulfilled, created and transitioned only by the create-paymongo-checkout /
+// paymongo-webhook Edge Functions (service role, bypasses RLS).
+export type OnlineOrderStatus = "pending" | "paid" | "cancelled" | "fulfilled";
+
+export interface OnlineOrder {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  status: OnlineOrderStatus;
+  paymentProvider: string;
+  paymentReference: string | null;
+  paymentMethod: string | null;
+  subtotal: number;
+  total: number;
+  paidAt: string | null;
+  fulfilledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Row shape of the online_orders_detail view
+export interface OnlineOrderDetail extends OnlineOrder {
+  customerName: string;
+  customerPhone: string;
+}
+
+export interface OnlineOrderItem {
+  id: string;
+  orderId: string;
+  itemId: string;
+  variantId: string;
+  sku: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number; // generated column
+}

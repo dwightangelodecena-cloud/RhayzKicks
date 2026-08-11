@@ -101,6 +101,7 @@ function GoogleIcon() {
 
 interface PasswordFieldProps {
   id: string
+  name: string
   label: string
   placeholder: string
   value: string
@@ -108,7 +109,7 @@ interface PasswordFieldProps {
   autoComplete: string
 }
 
-function PasswordField({ id, label, placeholder, value, onChange, autoComplete }: PasswordFieldProps) {
+function PasswordField({ id, name, label, placeholder, value, onChange, autoComplete }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false)
   return (
     <div className="rk-auth-field">
@@ -118,6 +119,7 @@ function PasswordField({ id, label, placeholder, value, onChange, autoComplete }
         <input
           className="rk-auth-input rk-auth-input-has-icon"
           id={id}
+          name={name}
           type={visible ? 'text' : 'password'}
           placeholder={placeholder}
           value={value}
@@ -171,15 +173,25 @@ export default function AuthPage() {
     setSuccess(null)
   }
 
-  const submit = async (e: FormEvent) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSubmitting(true)
     resetFeedback()
 
+    // Browser autofill can fill these inputs without reliably firing React's
+    // onChange, leaving `email`/`password` state stale (empty, if the field
+    // was never focused) even though the field visually shows a value — that
+    // silent mismatch was making sign-in fail once, then succeed on a retry
+    // once the state caught up. Reading straight from the submitted form
+    // sidesteps the whole class of "controlled input vs. autofill" races.
+    const formData = new FormData(e.currentTarget)
+    const submittedEmail = (formData.get('email') as string) || email
+    const submittedPassword = (formData.get('password') as string) || password
+
     if (isJoin) {
       const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+        email: submittedEmail,
+        password: submittedPassword,
         options: { data: { full_name: fullName } },
       })
       setSubmitting(false)
@@ -191,7 +203,7 @@ export default function AuthPage() {
       return
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: submittedEmail, password: submittedPassword })
     if (signInError) {
       setSubmitting(false)
       setError('Incorrect email or password.')
@@ -786,11 +798,12 @@ export default function AuthPage() {
             <label className="rk-auth-label" htmlFor="email">Email Address</label>
             <div className="rk-auth-input-wrap">
               <span className="rk-auth-input-icon"><MailIcon /></span>
-              <input className="rk-auth-input rk-auth-input-has-icon" id="email" type="email" placeholder="maria@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              <input className="rk-auth-input rk-auth-input-has-icon" id="email" name="email" type="email" placeholder="maria@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
             </div>
           </div>
           <PasswordField
             id="password"
+            name="password"
             label="Password"
             placeholder={isJoin ? 'At least 8 characters' : 'Your password'}
             value={password}
@@ -818,6 +831,7 @@ export default function AuthPage() {
           {isJoin && (
             <PasswordField
               id="confirmPassword"
+              name="confirmPassword"
               label="Confirm Password"
               placeholder="Repeat your password"
               value={confirmPassword}

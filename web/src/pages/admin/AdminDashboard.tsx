@@ -7,28 +7,47 @@ import AdminOverview from './AdminOverview'
 import AdminCMS from './AdminCMS'
 import AdminVendors from './AdminVendors'
 import AdminStaffHours from './AdminStaffHours'
-import { IconClock, IconLayers, IconLogout, IconOverview, IconStore, IconTruck } from './adminIcons'
+import AdminSalesPOS from './AdminSalesPOS'
+import AdminInventory from './AdminInventory'
+import AdminStaff from './AdminStaff'
+import AdminLoyalty from './AdminLoyalty'
+import StaffMyHours from './StaffMyHours'
+import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, IconStore, IconTruck, IconUsers, IconWallet } from './adminIcons'
+import type { StaffRole } from '../../types/database.types'
 
 const tabs = [
-  { label: 'Overview', icon: IconOverview, blurb: 'Store performance at a glance' },
-  { label: 'Content', icon: IconLayers, blurb: 'Banners, collections, categories & products — everything on the storefront' },
-  { label: 'Vendors', icon: IconTruck, blurb: 'Suppliers & purchase orders' },
-  { label: 'Staff Hours', icon: IconClock, blurb: 'Shift log & hours worked' },
+  { label: 'Overview', icon: IconOverview, blurb: 'Store performance at a glance', roles: ['admin'] },
+  { label: 'Sales', icon: IconWallet, blurb: 'Ring up a sale', roles: ['admin', 'staff'] },
+  { label: 'Inventory', icon: IconBox, blurb: 'Stock on hand & restocks', roles: ['admin', 'staff'] },
+  { label: 'Content', icon: IconLayers, blurb: 'Banners, collections, categories & products — everything on the storefront', roles: ['admin'] },
+  { label: 'Vendors', icon: IconTruck, blurb: 'Suppliers & purchase orders', roles: ['admin'] },
+  { label: 'Staff', icon: IconUsers, blurb: 'Staff roster & roles', roles: ['admin'] },
+  { label: 'Staff Hours', icon: IconClock, blurb: 'Shift log & hours worked', roles: ['admin'] },
+  { label: 'My Hours', icon: IconClock, blurb: 'Clock in / clock out', roles: ['staff'] },
+  { label: 'Loyalty', icon: IconMedal, blurb: 'Redemption options & issued vouchers', roles: ['admin'] },
 ] as const
 
 type TabLabel = (typeof tabs)[number]['label']
 
 export default function AdminDashboard() {
-  const [tab, setTab] = useState<TabLabel>('Overview')
+  const { logout, role } = useAdmin()
+  const visibleTabs = tabs.filter((t) => (t.roles as readonly StaffRole[]).includes(role ?? 'staff'))
+  const [tab, setTab] = useState<TabLabel>(visibleTabs[0]?.label ?? 'Sales')
   const [adminEmail, setAdminEmail] = useState<string | null>(null)
-  const { logout } = useAdmin()
   const navigate = useNavigate()
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setAdminEmail(data.user?.email ?? null))
   }, [])
 
-  const activeTab = tabs.find((t) => t.label === tab)!
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.label === tab)) {
+      setTab(visibleTabs[0].label)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role])
+
+  const activeTab = visibleTabs.find((t) => t.label === tab) ?? visibleTabs[0]
   const initials = (adminEmail ?? 'A').slice(0, 1).toUpperCase()
 
   return (
@@ -282,7 +301,7 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="rk-admin-nav">
-          {tabs.map((t) => {
+          {visibleTabs.map((t) => {
             const Icon = t.icon
             const isActive = tab === t.label
             return (
@@ -303,7 +322,7 @@ export default function AdminDashboard() {
             <div className="rk-admin-profile-avatar">{initials}</div>
             <div className="rk-admin-profile-text">
               <div className="rk-admin-profile-email">{adminEmail ?? 'Loading…'}</div>
-              <div className="rk-admin-profile-role">Admin</div>
+              <div className="rk-admin-profile-role">{role === 'admin' ? 'Admin' : 'Staff'}</div>
             </div>
           </div>
           <button className="rk-admin-sidebar-action" onClick={() => navigate('/')}>
@@ -323,14 +342,19 @@ export default function AdminDashboard() {
 
       <div className="rk-admin-main">
         <header className="rk-admin-header">
-          <h1 className="rk-admin-header-title">{activeTab.label}</h1>
-          <div className="rk-admin-header-blurb">{activeTab.blurb}</div>
+          <h1 className="rk-admin-header-title">{activeTab?.label}</h1>
+          <div className="rk-admin-header-blurb">{activeTab?.blurb}</div>
         </header>
         <div className="rk-admin-content">
           {tab === 'Overview' && <AdminOverview />}
+          {tab === 'Sales' && <AdminSalesPOS />}
+          {tab === 'Inventory' && <AdminInventory />}
           {tab === 'Content' && <AdminCMS />}
           {tab === 'Vendors' && <AdminVendors />}
+          {tab === 'Staff' && <AdminStaff />}
           {tab === 'Staff Hours' && <AdminStaffHours />}
+          {tab === 'My Hours' && <StaffMyHours />}
+          {tab === 'Loyalty' && <AdminLoyalty />}
         </div>
       </div>
     </div>

@@ -11,15 +11,17 @@ import ProductDetailPage from './pages/ProductDetailPage'
 import CollectionsPage from './pages/CollectionsPage'
 import HelpPage from './pages/HelpPage'
 import AccountPage from './pages/AccountPage'
+import OrderSuccessPage from './pages/OrderSuccessPage'
 import AuthPage from './pages/AuthPage'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import StaffSignup from './pages/admin/StaffSignup'
 import './theme/theme.css'
 
-function RequireAdmin({ children }: { children: ReactElement }) {
-  const { isAdmin, checkingSession } = useAdmin()
+function RequireStaff({ children }: { children: ReactElement }) {
+  const { isStaff, checkingSession } = useAdmin()
   if (checkingSession) return null
-  return isAdmin ? children : <Navigate to="/admin" replace />
+  return isStaff ? children : <Navigate to="/admin" replace />
 }
 
 function App() {
@@ -37,16 +39,18 @@ function App() {
                   <Route path="/collections" element={<CollectionsPage />} />
                   <Route path="/help" element={<HelpPage />} />
                   <Route path="/account" element={<AccountPage />} />
+                  <Route path="/order/success" element={<OrderSuccessPage />} />
                 </Route>
                 <Route path="/signin" element={<AuthPage />} />
                 <Route path="/join" element={<AuthPage />} />
                 <Route path="/admin" element={<AdminLogin />} />
+                <Route path="/staff/signup" element={<StaffSignup />} />
                 <Route
                   path="/admin/dashboard"
                   element={
-                    <RequireAdmin>
+                    <RequireStaff>
                       <AdminDashboard />
-                    </RequireAdmin>
+                    </RequireStaff>
                   }
                 />
                 <Route path="*" element={<Navigate to="/" replace />} />

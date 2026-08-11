@@ -80,10 +80,10 @@ function GoogleIcon() {
   )
 }
 
-const capabilities = ['Live Sales Data', 'Inventory Control', 'Staff & Vendors']
+const capabilities = ['Point of Sale', 'Inventory Control', 'Staff & Vendors']
 
 export default function AdminLogin() {
-  const { login, loginWithGoogle, isAdmin, checkingSession, rejectedReason, clearRejection } = useAdmin()
+  const { login, loginWithGoogle, isStaff, checkingSession, rejectedReason, clearRejection } = useAdmin()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -92,8 +92,8 @@ export default function AdminLogin() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!checkingSession && isAdmin) navigate('/admin/dashboard')
-  }, [checkingSession, isAdmin, navigate])
+    if (!checkingSession && isStaff) navigate('/admin/dashboard')
+  }, [checkingSession, isStaff, navigate])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -481,8 +481,8 @@ export default function AdminLogin() {
             <Logo size={64} ring ringColor="rgba(255, 255, 255, 0.18)" ringOffset={4} />
           </div>
           <div className="rk-admin-login-wordmark">RHAYZ<span>.</span></div>
-          <div className="rk-admin-login-sub">Admin Console</div>
-          <p className="rk-admin-login-tagline">Manage products, inventory, vendors, and staff — everything that runs the store, in one place.</p>
+          <div className="rk-admin-login-sub">Staff Console</div>
+          <p className="rk-admin-login-tagline">Ring up sales, manage stock, and clock your hours — admins get the full store console, everyone else gets what they need to work.</p>
           <div className="rk-admin-login-caps">
             {capabilities.map((c) => (
               <div key={c} className="rk-admin-login-cap">
@@ -496,7 +496,7 @@ export default function AdminLogin() {
       <div className="rk-admin-login-form-wrap">
         <div className="rk-admin-login-form-content">
           <p className="rk-admin-login-eyebrow">Restricted Access</p>
-          <h1 className="rk-admin-login-title">Admin Sign In</h1>
+          <h1 className="rk-admin-login-title">Staff Sign In</h1>
           <div className="rk-admin-login-heading-rule" />
           <form onSubmit={submit}>
             <div className="rk-admin-login-field">
@@ -505,7 +505,7 @@ export default function AdminLogin() {
                 <input
                   className="rk-admin-login-input"
                   type="email"
-                  placeholder="Admin email"
+                  placeholder="Work email"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value)
@@ -544,7 +544,7 @@ export default function AdminLogin() {
             </div>
             {shownError && <p className="rk-admin-login-error"><AlertIcon />{shownError}</p>}
             <button type="submit" className="rk-admin-login-submit" disabled={submitting}>
-              <span>{submitting ? 'Signing In…' : 'Access CMS'}</span>
+              <span>{submitting ? 'Signing In…' : 'Sign In'}</span>
               {!submitting && <ArrowIcon />}
             </button>
           </form>
@@ -552,6 +552,7 @@ export default function AdminLogin() {
           <button type="button" className="rk-admin-login-google" onClick={submitGoogle}>
             <GoogleIcon /> Continue with Google
           </button>
+          <Link to="/staff/signup" className="rk-admin-login-back">New hire? Create your login →</Link>
           <Link to="/" className="rk-admin-login-back">← Back to Store</Link>
         </div>
       </div>

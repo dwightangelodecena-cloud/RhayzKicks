@@ -225,7 +225,147 @@ variants can't silently create a colorway that was never registered. Existing pr
 colors — the migration backfills one `item_colorways` row per distinct `(item_id, color)` already
 present in `item_variants`. Same public-read/staff-write/admin-delete RLS posture as `item_images`.
 
+## Staff self-service: signup, account linking, stock adjustments
+
+Added by [`009_staff_self_service.sql`](009_staff_self_service.sql), to support the admin
+dashboard's Sales/POS, Inventory, and My Hours tabs (staff role, not just admin):
+
+- **`staff_shifts_update_self`** — a staff member can now update their *own* `staff_shifts` row
+  (to set `clock_out`), not just admins. Inserting the clock-in row was already allowed
+  (`staff_shifts_insert`); without this policy nobody but an admin could ever close out a shift.
+- **`create_staff_account(p_email, p_full_name, p_phone, p_role, p_employee_id)`** — admin-only,
+  `security definer`. Bridges the chicken-and-egg gap where `staff_insert` requires `is_admin()`
+  but the new hire needs an `auth.users` row before anyone can reference their id: they sign up
+  themselves at `/staff/signup` (creates the `auth.users` row, no `staff` row yet — inert until
+  linked), then an admin calls this function with their email to look them up in `auth.users`
+  (not otherwise queryable by client code) and insert the matching `staff` row.
+- **`adjust_stock(p_sku, p_quantity_change, p_type, p_reason)`** — atomic restock/adjustment/
+  damaged/return, same one-call-one-transaction reasoning as `create_sale()`. Not `security
+  definer` — the caller's own `is_active_staff()` grants already cover both writes
+  (`inventory_update`, `stock_movements_insert`); this just makes them atomic.
+
+## Admin safeguards + password-based staff creation
+
+Added by [`010_staff_admin_safeguards.sql`](010_staff_admin_safeguards.sql) and the
+[`create-staff-account`](functions/create-staff-account/index.ts) Edge Function.
+
+- **`staff_prevent_last_admin_change` / `staff_prevent_last_admin_delete`** — triggers on `staff`
+  that block any update/delete which would leave zero active `role = 'admin'` rows. Without this,
+  demoting or deactivating the only admin locks everyone out permanently: `staff_update` and
+  `staff_delete` both require `is_admin()`, so once nobody passes that check, nobody can ever
+  promote anyone back through the app — the only way out is a direct SQL editor edit (which runs
+  as `postgres` and bypasses RLS). The admin dashboard's Staff tab also disables the role/deactivate
+  controls on your own row and on the last remaining admin as a first line of defense; the triggers
+  are the actual backstop, since they apply no matter where the change comes from.
+- **`create-staff-account`** (Edge Function, not SQL) — lets an admin set a new hire's password
+  directly from the Staff tab instead of requiring `/staff/signup` first. Creating an arbitrary
+  `auth.users` row needs the `service_role` key, which must never reach client code, so this has to
+  run server-side. The function re-checks the caller is an active admin (via their own request's
+  auth header, RLS-scoped) before touching anything, then uses the service role to create the auth
+  user and insert the matching `staff` row in one call — rolling back the auth user if the `staff`
+  insert fails, so there's never an orphaned login with no roster entry. Deploy it with:
+  ```sh
+  supabase login
+  supabase link --project-ref <your-project-ref>
+  supabase functions deploy create-staff-account
+  ```
+  `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically in
+  the Edge Function runtime — no manual secret configuration needed. The Staff tab's "Already signed
+  up" mode (calling `create_staff_account()` from `009_staff_self_service.sql`) still works without
+  deploying anything, for anyone who'd rather self-serve at `/staff/signup`.
+
+## Online checkout: online_orders, online_order_items, PayMongo
+
+Added by [`011_online_orders.sql`](011_online_orders.sql) plus two Edge Functions. Lets the web
+storefront's "Checkout" button (`web/src/components/CartDrawer.tsx`) actually take a payment,
+instead of the placeholder message it showed before ("checkout happens in-store").
+
+**Why a separate table from `sales`**: a POS sale (`create_sale()`) is always instantly completed
+by a real staff member — `sales.staff_id` is `not null` on purpose. An online order has a
+payment-pending lifecycle that never applies to a POS sale (`pending` → `paid` → `fulfilled`, or
+`cancelled`), so it gets its own tables rather than loosening that constraint. The two aren't
+reconciled into one combined revenue report yet — see "Not built yet" below.
+
+- **`online_orders`** / **`online_order_items`** — mirrors `sales`/`sold_items`'s shape
+  (order number, line items with a snapshotted `unit_price`), but nothing here is writable by the
+  customer directly. Every row is created and transitioned only by the two Edge Functions below,
+  using the `service_role` key (bypasses RLS) — the RLS on these tables is deliberately
+  **read-only** for customers (`owns_customer`) and staff (`is_active_staff()`), because the price
+  actually charged has to be resolved from the live catalog server-side, never trusted from
+  whatever the browser's cached cart says.
+- **`mark_online_order_paid(p_order_id, p_payment_reference, p_payment_method)`** — same
+  one-call-one-transaction reasoning as `create_sale()`: inventory decrement + `stock_movements` +
+  loyalty points + clearing `cart_items` either all happen or none do. Idempotent on purpose —
+  PayMongo can retry a webhook, and a retry must not double-decrement stock.
+- **`stock_movements.staff_id` is now nullable** — an online sale isn't rung up by any staff
+  member, so `mark_online_order_paid` leaves it `null` rather than faking an attribution.
+- **`create-paymongo-checkout`** (Edge Function) — the customer's cart (`{itemId, size, color,
+  quantity}` only, no prices) is sent here. It re-resolves each line against `items`/
+  `item_variants`/`inventory` itself, rejects anything out of stock or no longer active, creates
+  the `online_orders`/`online_order_items` rows, then asks PayMongo for a hosted Checkout Session
+  and returns its URL for the browser to redirect to.
+- **`paymongo-webhook`** (Edge Function) — PayMongo's public callback. Verifies the
+  `Paymongo-Signature` header against `PAYMONGO_WEBHOOK_SECRET` (HMAC-SHA256), then calls
+  `mark_online_order_paid()`. **The exact payload shape (where `metadata.online_order_id` and the
+  payment method live) was written from memory, not verified against a live payload** — the
+  webhook extractors search recursively rather than assuming one fixed nesting, but double-check
+  against PayMongo's dashboard webhook event log the first time you test a real payment.
+- **`/order/success`** (web route) — where PayMongo's `success_url` sends the customer back to;
+  polls `online_orders` for a few seconds since the webhook can land just after the redirect, then
+  clears their local cart.
+
+### Setting this up
+
+1. Sign up at [paymongo.com](https://dashboard.paymongo.com/signup) — test-mode API keys are
+   available immediately, before business verification.
+2. From the PayMongo dashboard, grab your **test secret key** (`Developers → API keys`) and create
+   a webhook (`Developers → Webhooks`) pointing at
+   `https://<project-ref>.supabase.co/functions/v1/paymongo-webhook`, subscribed to
+   `checkout_session.payment.paid` — copy its **webhook secret**.
+3. Set both as Edge Function secrets:
+   ```sh
+   supabase secrets set PAYMONGO_SECRET_KEY=sk_test_xxx
+   supabase secrets set PAYMONGO_WEBHOOK_SECRET=whsk_xxx
+   ```
+4. Deploy both functions — the webhook needs `--no-verify-jwt` since PayMongo's request carries no
+   Supabase session, only its own signature:
+   ```sh
+   supabase functions deploy create-paymongo-checkout
+   supabase functions deploy paymongo-webhook --no-verify-jwt
+   ```
+5. Test with PayMongo's [test payment methods](https://developers.paymongo.com/docs/testing) (test
+   GCash number, test card 4343434343434345) before going live — then swap in live keys once
+   you're ready to accept real payments.
+
+## Customer order history: sales_select_own, sold_items_select_own
+
+Added by [`012_customer_order_history.sql`](012_customer_order_history.sql). Before this, a
+customer had no way to see their own purchases at all — `sales`/`sold_items` were staff-only
+(`is_active_staff()`), so even though `sales.customer_id` links a POS sale to them, they couldn't
+query it. Adds `owns_customer(customer_id)`-based select policies (same pattern as `vouchers`/
+`cart_items`/`online_orders`) so `web/src/pages/AccountPage.tsx`'s "My Orders" card can show both
+in-store and online purchases in one place.
+
+**Don't use `sales_detail` for this** — it inner-joins `staff` for `staff_name`, and a customer's
+own RLS can't see any `staff` rows (`staff_select` requires `is_active_staff()`), so under
+`security_invoker = true` the join silently drops every row and the view returns nothing for a
+customer even though their `sales` row is now selectable directly. Query `sales` directly instead
+when the reader might not be staff.
+
+Also fixes `mark_online_order_paid()` to bump `customers.total_purchases` — it already awarded
+loyalty points for a paid online order, but the "Total Purchases" stat only ever summed `sales`
+(POS), so online spending wasn't reflected there even though points were.
+
 ## Not built yet
 
 - Multi-branch/warehouse support — `inventory` currently assumes a single location. For multiple
   stores, add a `branch_id` column and change the primary key to `(branch_id, sku)`.
+- Combined revenue reporting across `sales` (in-store) and `online_orders` (web/mobile checkout) —
+  the admin Overview tab's revenue KPIs currently only read `sales`, so paid online orders don't
+  show up there yet (they do show under Sales → Online Orders, just not in the top-line numbers).
+- Mobile checkout — `Rhayzkicks Mobile` still shows the same "browsing only" placeholder the web
+  app used to. The PayMongo flow above is web-only for now; the mobile app would need its own
+  client to call `create-paymongo-checkout` and open the returned `checkout_url` in an in-app
+  browser/webview.
+- Refund/cancel flow for online orders — `online_orders.status` can be set to `cancelled` by staff,
+  but nothing automatically restocks inventory or refunds the PayMongo payment when that happens.

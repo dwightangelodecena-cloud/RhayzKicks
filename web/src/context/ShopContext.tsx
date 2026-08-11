@@ -29,6 +29,7 @@ interface ShopContextValue {
   addToCart: (product: Product, variant?: CartVariant) => void
   removeFromCart: (id: string, variant?: CartVariant) => void
   setQty: (id: string, qty: number, variant?: CartVariant) => void
+  clearCart: () => void
   toggleWishlist: (product: Product) => void
   isWishlisted: (id: string) => boolean
   isCartOpen: boolean
@@ -87,6 +88,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     )
   }
 
+  const clearCart = () => setCart([])
+
   const toggleWishlist = (product: Product) => {
     setWishlist((items) =>
       items.some((p) => p.id === product.id) ? items.filter((p) => p.id !== product.id) : [...items, product],
@@ -119,6 +122,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     addToCart,
     removeFromCart,
     setQty,
+    clearCart,
     toggleWishlist,
     isWishlisted,
     isCartOpen,
