@@ -117,6 +117,13 @@ export async function getProductsForCategorySlug(slug: string): Promise<Product[
   return ((data ?? []) as ItemRow[]).map(toProduct)
 }
 
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase.from('items').select(ITEM_COLUMNS).eq('is_active', true).in('id', ids)
+  if (error) throw error
+  return ((data ?? []) as ItemRow[]).map(toProduct)
+}
+
 export async function getRecommendedProducts(product: Product, limit = 4): Promise<Product[]> {
   const { data, error } = await supabase
     .from('items')

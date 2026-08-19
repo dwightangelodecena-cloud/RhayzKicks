@@ -75,9 +75,13 @@ is the helper policies use to check "is the current session this customer" the s
 
 - **`wishlist_items`** — a customer's saved "I like this" list, by `item_id` (no size needed).
 - **`cart_items`** — a customer's "intend to buy" list, by `item_variants.id` (a specific
-  size/sku, since it's meant to become a real sale). Staff can read any customer's cart (that's
-  the point of storing it in Supabase instead of on-device only — mobile never checks out, so
-  staff pull up the cart while building the sale on the web).
+  size/sku, since it's meant to become a real sale). Both apps read and write these tables
+  directly for the logged-in customer (gated behind having an account on both), with a Realtime
+  subscription (`013_cart_wishlist_realtime.sql`) so an add/remove on one app shows up on the
+  other without needing to reopen it — this is the actual shopping cart/wishlist, not a
+  per-device cache. Mobile still never checks out (browsing + bag + wishlist + loyalty only); web
+  is where a cart becomes a real `online_orders` sale. Staff can also read any customer's cart
+  (useful for pulling it up while building a sale at the register).
 - **Points**: every item in the catalog has its own `items.points_value`, set per model by
   staff/admin (e.g. "Kobe 5 Lower Merion = 10 pts", "Kobe 4 Daddy Girl = 15 pts"). `create_sale()`
   sums `quantity * points_value` across the line items itself and adds it to

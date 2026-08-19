@@ -19,7 +19,7 @@ function HeartIcon({ filled }: { filled: boolean }) {
 }
 
 export default function ProductCard({ product, badgeOverride }: ProductCardProps) {
-  const { addToCart, toggleWishlist, isWishlisted } = useShop()
+  const { toggleWishlist, isWishlisted } = useShop()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -124,7 +124,7 @@ export default function ProductCard({ product, badgeOverride }: ProductCardProps
         </button>
         <ImgSlot label={product.name} size="400 × 300 px" src={product.imageUrl} />
       </div>
-      <button className="rk-product-quickadd" onClick={() => (isAuthenticated ? addToCart(product) : requireAuth())}>+ Quick Add</button>
+      <button className="rk-product-quickadd" onClick={() => navigate(`/product/${product.id}`)}>Select Size</button>
       <button className="rk-product-name" onClick={() => navigate(`/product/${product.id}`)}>{product.name}</button>
       <span className="rk-product-price">{formatPeso(product.price)}</span>
     </div>

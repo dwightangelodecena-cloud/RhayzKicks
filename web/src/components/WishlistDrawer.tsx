@@ -15,13 +15,18 @@ function HeartIcon() {
 }
 
 export default function WishlistDrawer() {
-  const { isWishlistOpen, closeDrawers, wishlist, toggleWishlist, addToCart } = useShop()
+  const { isWishlistOpen, closeDrawers, wishlist, toggleWishlist } = useShop()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
   const requireAuth = () => {
     closeDrawers()
     navigate('/join', { state: { from: '/' } })
+  }
+
+  const goToProduct = (id: string) => {
+    closeDrawers()
+    navigate(`/product/${id}`)
   }
 
   return (
@@ -88,7 +93,7 @@ export default function WishlistDrawer() {
               <span className="rk-wishlist-name">{product.name}</span>
               <span className="rk-wishlist-price">{formatPeso(product.price)}</span>
               <div className="rk-wishlist-actions">
-                <button className="rk-wl-add" onClick={() => (isAuthenticated ? addToCart(product) : requireAuth())}>Add to Bag</button>
+                <button className="rk-wl-add" onClick={() => (isAuthenticated ? goToProduct(product.id) : requireAuth())}>Select Size</button>
                 <button onClick={() => (isAuthenticated ? toggleWishlist(product) : requireAuth())}>Remove</button>
               </div>
             </div>

@@ -1,15 +1,16 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import type { Product } from '../lib/storeData'
-
-const CART_KEY = 'rk-cart'
-const WISHLIST_KEY = 'rk-wishlist'
+import { supabase } from '../supabase'
+import { useAuth } from './AuthContext'
+import { getProductsByIds, type Product } from '../lib/storeData'
 
 export interface CartLine {
+  id: string
   product: Product
   qty: number
   size?: string
   colorway?: string
+  variantId: string
 }
 
 export interface CartVariant {
@@ -17,8 +18,8 @@ export interface CartVariant {
   colorway?: string
 }
 
-function sameLine(line: CartLine, product: Product, variant?: CartVariant) {
-  return line.product.id === product.id && line.size === variant?.size && line.colorway === variant?.colorway
+function matchesLine(line: CartLine, productId: string, variant?: CartVariant) {
+  return line.product.id === productId && line.size === variant?.size && line.colorway === variant?.colorway
 }
 
 interface ShopContextValue {
@@ -26,7 +27,7 @@ interface ShopContextValue {
   wishlist: Product[]
   cartCount: number
   cartSubtotal: number
-  addToCart: (product: Product, variant?: CartVariant) => void
+  addToCart: (variantId: string) => void
   removeFromCart: (id: string, variant?: CartVariant) => void
   setQty: (id: string, qty: number, variant?: CartVariant) => void
   clearCart: () => void
@@ -39,43 +40,130 @@ interface ShopContextValue {
   closeDrawers: () => void
 }
 
-function loadJSON<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
-    return fallback
-  }
-}
-
 const ShopContext = createContext<ShopContextValue | null>(null)
 
+interface CartItemRow {
+  id: string
+  variant_id: string
+  quantity: number
+}
+
+interface VariantRow {
+  id: string
+  item_id: string
+  size: string
+  color: string
+}
+
+async function loadCart(customerId: string): Promise<CartLine[]> {
+  const { data: rows, error } = await supabase
+    .from('cart_items')
+    .select('id, variant_id, quantity')
+    .eq('customer_id', customerId)
+  if (error) throw error
+  const cartRows = (rows ?? []) as CartItemRow[]
+  if (cartRows.length === 0) return []
+
+  const variantIds = cartRows.map((r) => r.variant_id)
+  const { data: variantRows, error: variantError } = await supabase
+    .from('item_variants')
+    .select('id, item_id, size, color')
+    .in('id', variantIds)
+  if (variantError) throw variantError
+
+  const variantById = new Map(((variantRows ?? []) as VariantRow[]).map((v) => [v.id, v]))
+  const itemIds = Array.from(new Set(Array.from(variantById.values()).map((v) => v.item_id)))
+  const products = await getProductsByIds(itemIds)
+  const productById = new Map(products.map((p) => [p.id, p]))
+
+  const lines: CartLine[] = []
+  for (const row of cartRows) {
+    const variant = variantById.get(row.variant_id)
+    const product = variant && productById.get(variant.item_id)
+    if (!variant || !product) continue
+    lines.push({ id: row.id, product, qty: row.quantity, size: variant.size, colorway: variant.color, variantId: variant.id })
+  }
+  return lines
+}
+
+async function loadWishlist(customerId: string): Promise<Product[]> {
+  const { data: rows, error } = await supabase.from('wishlist_items').select('item_id').eq('customer_id', customerId)
+  if (error) throw error
+  const itemIds = (rows ?? []).map((r) => r.item_id as string)
+  return getProductsByIds(itemIds)
+}
+
 export function ShopProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartLine[]>(() => loadJSON(CART_KEY, []))
-  const [wishlist, setWishlist] = useState<Product[]>(() => loadJSON(WISHLIST_KEY, []))
+  const { customer } = useAuth()
+  const [cart, setCart] = useState<CartLine[]>([])
+  const [wishlist, setWishlist] = useState<Product[]>([])
   const [isCartOpen, setCartOpen] = useState(false)
   const [isWishlistOpen, setWishlistOpen] = useState(false)
 
-  useEffect(() => {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart))
-  }, [cart])
+  const refreshCart = useCallback(async (customerId: string) => {
+    try {
+      setCart(await loadCart(customerId))
+    } catch {
+      setCart([])
+    }
+  }, [])
+
+  const refreshWishlist = useCallback(async (customerId: string) => {
+    try {
+      setWishlist(await loadWishlist(customerId))
+    } catch {
+      setWishlist([])
+    }
+  }, [])
 
   useEffect(() => {
-    localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist))
-  }, [wishlist])
+    if (!customer) {
+      setCart([])
+      setWishlist([])
+      return
+    }
+    refreshCart(customer.id)
+    refreshWishlist(customer.id)
 
-  const addToCart = (product: Product, variant?: CartVariant) => {
-    setCart((lines) => {
-      const existing = lines.find((l) => sameLine(l, product, variant))
-      if (existing) {
-        return lines.map((l) => (sameLine(l, product, variant) ? { ...l, qty: l.qty + 1 } : l))
-      }
-      return [...lines, { product, qty: 1, size: variant?.size, colorway: variant?.colorway }]
-    })
+    const channel = supabase
+      .channel(`shop-${customer.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cart_items', filter: `customer_id=eq.${customer.id}` },
+        () => refreshCart(customer.id),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wishlist_items', filter: `customer_id=eq.${customer.id}` },
+        () => refreshWishlist(customer.id),
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [customer, refreshCart, refreshWishlist])
+
+  const addToCart = (variantId: string) => {
+    if (!customer) return
+    const customerId = customer.id
+    const existing = cart.find((l) => l.variantId === variantId)
+    const write = existing
+      ? supabase.from('cart_items').update({ quantity: existing.qty + 1 }).eq('id', existing.id)
+      : supabase.from('cart_items').insert({ customer_id: customerId, variant_id: variantId, quantity: 1 })
+    write.then(() => refreshCart(customerId))
   }
 
   const removeFromCart = (id: string, variant?: CartVariant) => {
-    setCart((lines) => lines.filter((l) => !(l.product.id === id && l.size === variant?.size && l.colorway === variant?.colorway)))
+    if (!customer) return
+    const customerId = customer.id
+    const line = cart.find((l) => matchesLine(l, id, variant))
+    if (!line) return
+    supabase
+      .from('cart_items')
+      .delete()
+      .eq('id', line.id)
+      .then(() => refreshCart(customerId))
   }
 
   const setQty = (id: string, qty: number, variant?: CartVariant) => {
@@ -83,17 +171,35 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       removeFromCart(id, variant)
       return
     }
-    setCart((lines) =>
-      lines.map((l) => (l.product.id === id && l.size === variant?.size && l.colorway === variant?.colorway ? { ...l, qty } : l)),
-    )
+    if (!customer) return
+    const customerId = customer.id
+    const line = cart.find((l) => matchesLine(l, id, variant))
+    if (!line) return
+    supabase
+      .from('cart_items')
+      .update({ quantity: qty })
+      .eq('id', line.id)
+      .then(() => refreshCart(customerId))
   }
 
-  const clearCart = () => setCart([])
+  const clearCart = () => {
+    if (!customer) return
+    const customerId = customer.id
+    supabase
+      .from('cart_items')
+      .delete()
+      .eq('customer_id', customerId)
+      .then(() => refreshCart(customerId))
+  }
 
   const toggleWishlist = (product: Product) => {
-    setWishlist((items) =>
-      items.some((p) => p.id === product.id) ? items.filter((p) => p.id !== product.id) : [...items, product],
-    )
+    if (!customer) return
+    const customerId = customer.id
+    const already = wishlist.some((p) => p.id === product.id)
+    const write = already
+      ? supabase.from('wishlist_items').delete().eq('customer_id', customerId).eq('item_id', product.id)
+      : supabase.from('wishlist_items').insert({ customer_id: customerId, item_id: product.id })
+    write.then(() => refreshWishlist(customerId))
   }
 
   const isWishlisted = (id: string) => wishlist.some((p) => p.id === id)

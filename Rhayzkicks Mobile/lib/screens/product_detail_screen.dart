@@ -100,13 +100,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final sizes = <String>{for (final v in variantsForColorway) v.size}.toList();
     final colorways = <String>{for (final v in product.variants) v.color}.toList();
 
-    ProductVariant? selectedVariant;
+    ProductVariant? matchedVariant;
     for (final v in product.variants) {
       if (v.size == _size && v.color == colorway) {
-        selectedVariant = v;
+        matchedVariant = v;
         break;
       }
     }
+    final selectedVariant = matchedVariant;
 
     var photos = colorway != null ? (product.galleryByColor[colorway] ?? const <String>[]) : const <String>[];
     if (photos.isEmpty && product.imageUrl != null) photos = [product.imageUrl!];
@@ -300,7 +301,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 requireAuth(context);
                                 return;
                               }
-                              context.read<ShopController>().addToCart(product, size: _size, colorway: colorway);
+                              context.read<ShopController>().addToCart(product, variantId: selectedVariant.id);
                               setState(() => _added = true);
                             },
                       style: ElevatedButton.styleFrom(
@@ -371,10 +372,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   itemBuilder: (context, i) {
                     final rec = _recommended[i];
-                    return ProductCard(
-                      product: rec,
-                      onQuickAdd: () => context.read<ShopController>().addToCart(rec),
-                    );
+                    return ProductCard(product: rec);
                   },
                 ),
               ),

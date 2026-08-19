@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../data/store_repository.dart';
 import '../models/database_models.dart';
 import '../state/home_content_controller.dart';
-import '../state/shop_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/page_hero.dart';
 import '../widgets/product_card.dart';
@@ -179,10 +178,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                             ),
                             itemBuilder: (context, i) {
                               final product = products[i];
-                              return ProductCard(
-                                product: product,
-                                onQuickAdd: () => context.read<ShopController>().addToCart(product),
-                              );
+                              return ProductCard(product: product);
                             },
                           ),
                       ],

@@ -1,21 +1,20 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/store_repository.dart';
 import '../models/database_models.dart';
 
-// One line item in the bag: a product plus how many the shopper wants.
-class CartLine {
-  final Product product;
-  int qty;
-  final String? size;
-  final String? colorway;
-
-  CartLine({required this.product, this.qty = 1, this.size, this.colorway});
-}
-
-// Local, in-memory cart/wishlist state shared across the app via Provider.
-// Mirrors web's ShopContext — no backend writes, browsing only, no checkout.
+// Cart/wishlist state backed by Supabase (`cart_items`/`wishlist_items`), one
+// row per logged-in customer, shared with the web app. A Realtime
+// subscription keeps this in sync when the same customer edits their bag or
+// wishlist on the other app. Mirrors web's ShopContext.
 class ShopController extends ChangeNotifier {
-  final List<CartLine> _cart = [];
-  final List<Product> _wishlist = [];
+  SupabaseClient get _client => Supabase.instance.client;
+
+  String? _customerId;
+  List<CartLine> _cart = [];
+  List<Product> _wishlist = [];
+  RealtimeChannel? _channel;
 
   List<CartLine> get cart => List.unmodifiable(_cart);
   List<Product> get wishlist => List.unmodifiable(_wishlist);
@@ -24,45 +23,126 @@ class ShopController extends ChangeNotifier {
 
   num get cartSubtotal => _cart.fold<num>(0, (sum, line) => sum + line.qty * line.product.price);
 
-  void addToCart(Product product, {String? size, String? colorway}) {
-    final idx = _cart.indexWhere(
-      (l) => l.product.id == product.id && l.size == size && l.colorway == colorway,
-    );
-    if (idx >= 0) {
-      _cart[idx].qty += 1;
-    } else {
-      _cart.add(CartLine(product: product, size: size, colorway: colorway));
-    }
-    notifyListeners();
-  }
-
-  void removeFromCart(String productId, {String? size, String? colorway}) {
-    _cart.removeWhere((l) => l.product.id == productId && l.size == size && l.colorway == colorway);
-    notifyListeners();
-  }
-
-  void setQty(String productId, int qty, {String? size, String? colorway}) {
-    if (qty <= 0) {
-      removeFromCart(productId, size: size, colorway: colorway);
+  // Called whenever AuthController's customer changes (login/logout/switch).
+  void setCustomerId(String? customerId) {
+    if (_customerId == customerId) return;
+    _customerId = customerId;
+    _unsubscribe();
+    if (customerId == null) {
+      _cart = [];
+      _wishlist = [];
+      notifyListeners();
       return;
     }
-    final idx = _cart.indexWhere(
-      (l) => l.product.id == productId && l.size == size && l.colorway == colorway,
-    );
-    if (idx >= 0) {
-      _cart[idx].qty = qty;
-      notifyListeners();
+    _refreshCart();
+    _refreshWishlist();
+    _subscribe(customerId);
+  }
+
+  void _subscribe(String customerId) {
+    _channel = _client
+        .channel('shop-$customerId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'cart_items',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'customer_id', value: customerId),
+          callback: (_) => _refreshCart(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'wishlist_items',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'customer_id', value: customerId),
+          callback: (_) => _refreshWishlist(),
+        )
+        .subscribe();
+  }
+
+  void _unsubscribe() {
+    final channel = _channel;
+    _channel = null;
+    if (channel != null) _client.removeChannel(channel);
+  }
+
+  Future<void> _refreshCart() async {
+    final customerId = _customerId;
+    if (customerId == null) return;
+    try {
+      final lines = await getCartLines(customerId);
+      if (_customerId == customerId) {
+        _cart = lines;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Keep the last known cart rather than clearing it on a blip.
     }
+  }
+
+  Future<void> _refreshWishlist() async {
+    final customerId = _customerId;
+    if (customerId == null) return;
+    try {
+      final products = await getWishlistProducts(customerId);
+      if (_customerId == customerId) {
+        _wishlist = products;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Keep the last known wishlist rather than clearing it on a blip.
+    }
+  }
+
+  Future<void> addToCart(Product product, {required String variantId}) async {
+    final customerId = _customerId;
+    if (customerId == null) return;
+    final existing = _cart.where((l) => l.variantId == variantId).firstOrNull;
+    if (existing != null) {
+      await _client.from('cart_items').update({'quantity': existing.qty + 1}).eq('id', existing.id);
+    } else {
+      await _client.from('cart_items').insert({'customer_id': customerId, 'variant_id': variantId, 'quantity': 1});
+    }
+    await _refreshCart();
+  }
+
+  Future<void> removeFromCart(String productId, {String? size, String? colorway}) async {
+    final line = _cart.where((l) => l.product.id == productId && l.size == size && l.colorway == colorway).firstOrNull;
+    if (line == null) return;
+    await _client.from('cart_items').delete().eq('id', line.id);
+    await _refreshCart();
+  }
+
+  Future<void> setQty(String productId, int qty, {String? size, String? colorway}) async {
+    if (qty <= 0) {
+      await removeFromCart(productId, size: size, colorway: colorway);
+      return;
+    }
+    final line = _cart.where((l) => l.product.id == productId && l.size == size && l.colorway == colorway).firstOrNull;
+    if (line == null) return;
+    await _client.from('cart_items').update({'quantity': qty}).eq('id', line.id);
+    await _refreshCart();
   }
 
   bool isWishlisted(String productId) => _wishlist.any((p) => p.id == productId);
 
-  void toggleWishlist(Product product) {
+  Future<void> toggleWishlist(Product product) async {
+    final customerId = _customerId;
+    if (customerId == null) return;
     if (isWishlisted(product.id)) {
-      _wishlist.removeWhere((p) => p.id == product.id);
+      await _client.from('wishlist_items').delete().eq('customer_id', customerId).eq('item_id', product.id);
     } else {
-      _wishlist.add(product);
+      await _client.from('wishlist_items').insert({'customer_id': customerId, 'item_id': product.id});
     }
-    notifyListeners();
+    await _refreshWishlist();
   }
+
+  @override
+  void dispose() {
+    _unsubscribe();
+    super.dispose();
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

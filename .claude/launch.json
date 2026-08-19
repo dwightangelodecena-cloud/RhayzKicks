@@ -2,14 +2,22 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "rhayzkicks-web",
-      "url": "http://localhost:5173"
+      "name": "web-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "web"],
+      "port": 5173
     },
     {
-      "name": "rhayzkicks-mobile",
+      "name": "laravel-api",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-NoProfile", "-Command", "Set-Location 'Rhayzkicks Mobile'; flutter run -d web-server --web-port 5174 --web-hostname 0.0.0.0"],
-      "port": 5174
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "laravel-api/run_api.ps1"],
+      "port": 8000
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "Rhayzkicks Mobile/run_web.ps1"],
+      "port": 8090
     }
   ]
 }

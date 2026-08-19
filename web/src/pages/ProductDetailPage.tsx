@@ -76,10 +76,9 @@ export default function ProductDetailPage() {
   const requireAuth = () => navigate('/join', { state: { from: `/product/${product.id}` } })
 
   const addToBag = () => {
-    if (!size) return
+    if (!size || !selectedVariant) return
     if (!isAuthenticated) return requireAuth()
-    const { variants: _variants, ...baseProduct } = product
-    addToCart(baseProduct, { size, colorway: colorway ?? undefined })
+    addToCart(selectedVariant.id)
     setAdded(true)
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/store_repository.dart';
+import '../screens/product_detail_screen.dart';
 import '../state/auth_controller.dart';
 import '../state/require_auth.dart';
 import '../state/shop_controller.dart';
@@ -8,8 +9,9 @@ import '../theme/app_theme.dart';
 import 'network_image_or_slot.dart';
 
 // Tall, near-fullscreen bottom sheets for the wishlist and bag, opened from
-// RkTopBar's heart/bag icons. Mirrors web's WishlistDrawer/CartDrawer. The
-// Checkout button is a placeholder — this app doesn't process real payment.
+// RkTopBar's heart/bag icons. Mirrors web's WishlistDrawer/CartDrawer. This
+// app never checks out — the bag footer just points shoppers to the website
+// or the store.
 
 void showWishlistSheet(BuildContext context) {
   _showShopSheet(context, title: 'Wishlist', body: const _WishlistSheetBody());
@@ -163,9 +165,13 @@ class _WishlistSheetBody extends StatelessWidget {
                       children: [
                         _smallButton(
                           context,
-                          'Add to Bag',
+                          'Select Size',
                           filled: true,
-                          onTap: () => isAuthenticated ? context.read<ShopController>().addToCart(product) : requireAuth(context),
+                          onTap: () {
+                            if (!isAuthenticated) return requireAuth(context);
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(productId: product.id)));
+                          },
                         ),
                         const SizedBox(width: 8),
                         _smallButton(
@@ -210,7 +216,7 @@ class _CartSheetBody extends StatelessWidget {
       itemBuilder: (context, i) {
         final line = shop.cart[i];
         final product = line.product;
-        final variantLabel = [line.colorway, line.size].where((v) => v != null).join(' · ');
+        final variantLabel = [line.colorway, line.size].join(' · ');
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
@@ -259,21 +265,16 @@ class _CartSheetBody extends StatelessWidget {
   }
 }
 
-class _CartSheetFooter extends StatefulWidget {
+// No checkout here by design — this app is for browsing, building a bag, and
+// saving favorites. A customer's bag carries over to the website (and to
+// staff at the register), which is where it becomes a real order.
+class _CartSheetFooter extends StatelessWidget {
   const _CartSheetFooter();
-
-  @override
-  State<_CartSheetFooter> createState() => _CartSheetFooterState();
-}
-
-class _CartSheetFooterState extends State<_CartSheetFooter> {
-  bool _checkoutTapped = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.rkColors;
     final shop = context.watch<ShopController>();
-    final isAuthenticated = context.watch<AuthController>().isAuthenticated;
     if (shop.cart.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -288,33 +289,9 @@ class _CartSheetFooterState extends State<_CartSheetFooter> {
               Text(formatPeso(shop.cartSubtotal), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: colors.text)),
             ],
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (!isAuthenticated) {
-                  Navigator.pop(context);
-                  requireAuth(context);
-                  return;
-                }
-                setState(() => _checkoutTapped = true);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colors.text,
-                foregroundColor: colors.bg,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const StadiumBorder(),
-                elevation: 0,
-              ),
-              child: const Text('CHECKOUT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.6)),
-            ),
-          ),
           const SizedBox(height: 10),
           Text(
-            _checkoutTapped
-                ? 'Checkout isn\'t live yet — head in-store or watch for our next release.'
-                : 'Checkout happens in-store or on our next release — this app is browsing only for now.',
+            'Checkout happens on the RhayzKicks website or in-store — this app is for browsing and building your bag.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 11.5, color: colors.textMuted),
           ),

@@ -670,6 +670,27 @@ class CartItem {
       );
 }
 
+// One line item in the bag as shown in the UI: a `cart_items` row (id,
+// variantId, qty) joined with its product for display. Built by
+// store_repository.getCartLines — mirrors web's ShopContext CartLine.
+class CartLine {
+  final String id;
+  final Product product;
+  int qty;
+  final String size;
+  final String colorway;
+  final String variantId;
+
+  CartLine({
+    required this.id,
+    required this.product,
+    required this.qty,
+    required this.size,
+    required this.colorway,
+    required this.variantId,
+  });
+}
+
 /// The reusable catalog of voucher options an admin curates — populates the
 /// customer's 100-point redemption pop-up and any future ad-hoc grant.
 class VoucherTemplate {

@@ -24,8 +24,11 @@ class RhayzKicksApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeController()),
-        ChangeNotifierProvider(create: (_) => ShopController()),
         ChangeNotifierProvider(create: (_) => AuthController()),
+        ChangeNotifierProxyProvider<AuthController, ShopController>(
+          create: (_) => ShopController(),
+          update: (_, auth, shop) => shop!..setCustomerId(auth.customer?.id),
+        ),
         ChangeNotifierProvider(create: (_) => HomeContentController()..load()),
       ],
       child: Consumer<ThemeController>(

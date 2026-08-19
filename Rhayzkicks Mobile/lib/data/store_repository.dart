@@ -1,29 +1,37 @@
 // Mirrors web/src/lib/storeData.ts — every function here reads the exact
 // same Supabase tables/columns the web admin manages. There is no
 // mobile-specific content or admin UI; mobile only ever reads.
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../api_config.dart';
 import '../models/database_models.dart';
 
 const _itemColumns = 'id, name, brand, category, gender, base_price, image_urls, description, created_at';
 
 SupabaseClient get _client => Supabase.instance.client;
 
+// Products now go through the Laravel API (laravel-api/routes/api.php),
+// which is the only thing that queries Supabase for item data. Every other
+// function below still talks to Supabase directly.
 Future<List<Product>> getActiveProducts() async {
-  final rows = await _client.from('items').select(_itemColumns).eq('is_active', true).order('sort_order');
-  return (rows as List).map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
+  final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/products'));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to load products: ${response.statusCode}');
+  }
+  final rows = jsonDecode(response.body) as List;
+  return rows.map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
 }
 
 Future<List<Product>> getProductsForCategorySlug(String slug) async {
-  var query = _client.from('items').select(_itemColumns).eq('is_active', true);
-  if (slug == 'new-releases') {
-    final since = DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
-    query = query.gte('created_at', since);
-  } else {
-    query = query.eq('category', slug);
+  final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/products/category/$slug'));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to load products for $slug: ${response.statusCode}');
   }
-  final rows = await query.order('sort_order');
-  return (rows as List).map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
+  final rows = jsonDecode(response.body) as List;
+  return rows.map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
 }
 
 Future<List<Product>> getRecommendedProducts(Product product, {int limit = 4}) async {
@@ -93,6 +101,48 @@ Future<ProductDetail?> getProductDetail(String id) async {
     galleryByColor: galleryByColor,
     swatchByColor: swatchByColor,
   );
+}
+
+Future<List<Product>> getProductsByIds(List<String> ids) async {
+  if (ids.isEmpty) return [];
+  final rows = await _client.from('items').select(_itemColumns).eq('is_active', true).inFilter('id', ids);
+  return (rows as List).map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
+}
+
+Future<List<CartLine>> getCartLines(String customerId) async {
+  final rows = await _client.from('cart_items').select('id, variant_id, quantity').eq('customer_id', customerId);
+  final cartRows = rows as List;
+  if (cartRows.isEmpty) return [];
+
+  final variantIds = cartRows.map((r) => r['variant_id'] as String).toList();
+  final variantRows = await _client.from('item_variants').select('id, item_id, size, color').inFilter('id', variantIds);
+  final variantById = {for (final v in variantRows as List) v['id'] as String: v};
+
+  final itemIds = {for (final v in variantRows) v['item_id'] as String}.toList();
+  final products = await getProductsByIds(itemIds);
+  final productById = {for (final p in products) p.id: p};
+
+  final lines = <CartLine>[];
+  for (final row in cartRows) {
+    final variant = variantById[row['variant_id']];
+    final product = variant != null ? productById[variant['item_id']] : null;
+    if (variant == null || product == null) continue;
+    lines.add(CartLine(
+      id: row['id'] as String,
+      product: product,
+      qty: row['quantity'] as int,
+      size: variant['size'] as String,
+      colorway: variant['color'] as String,
+      variantId: variant['id'] as String,
+    ));
+  }
+  return lines;
+}
+
+Future<List<Product>> getWishlistProducts(String customerId) async {
+  final rows = await _client.from('wishlist_items').select('item_id').eq('customer_id', customerId);
+  final itemIds = (rows as List).map((r) => r['item_id'] as String).toList();
+  return getProductsByIds(itemIds);
 }
 
 Future<List<NavCategory>> getNavCategories() async {

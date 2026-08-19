@@ -150,10 +150,7 @@ class _SignatureSilhouettesState extends State<SignatureSilhouettes> {
                             right: 6,
                             bottom: 6,
                             child: InkWell(
-                              onTap: () {
-                                if (!isAuthenticated) return requireAuth(context);
-                                context.read<ShopController>().addToCart(product);
-                              },
+                              onTap: openDetail,
                               customBorder: const CircleBorder(),
                               child: Container(
                                 padding: const EdgeInsets.all(6),

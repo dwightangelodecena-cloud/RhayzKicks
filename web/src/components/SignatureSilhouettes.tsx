@@ -17,7 +17,7 @@ function HeartIcon({ filled }: { filled: boolean }) {
 export default function SignatureSilhouettes() {
   const [products, setProducts] = useState<Product[]>([])
   const [activeFilter, setActiveFilter] = useState('All')
-  const { addToCart, toggleWishlist, isWishlisted } = useShop()
+  const { toggleWishlist, isWishlisted } = useShop()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
@@ -275,11 +275,10 @@ export default function SignatureSilhouettes() {
                     className="rk-quick-add-btn"
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (!isAuthenticated) return requireAuth()
-                      addToCart(product)
+                      navigate(`/product/${product.id}`)
                     }}
                   >
-                    + Quick Add
+                    Select Size
                   </button>
                 </div>
               </div>

@@ -10,15 +10,15 @@ import '../theme/app_theme.dart';
 import 'network_image_or_slot.dart';
 
 // Grid tile used on category pages: media + badge + favorite heart, a
-// full-width "+ Quick Add" button, then name/price. Tapping the image or
-// name opens ProductDetailScreen to pick size/colorway. Mirrors web's
-// ProductCard.tsx.
+// full-width "Select Size" button, then name/price. Tapping the image, name,
+// or the button opens ProductDetailScreen to pick size/colorway — a cart
+// line always needs a real variant, so there's no size-less quick add.
+// Mirrors web's ProductCard.tsx.
 class ProductCard extends StatelessWidget {
   final Product product;
   final String? badgeOverride;
-  final VoidCallback onQuickAdd;
 
-  const ProductCard({super.key, required this.product, this.badgeOverride, required this.onQuickAdd});
+  const ProductCard({super.key, required this.product, this.badgeOverride});
 
   void _openDetail(BuildContext context) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(productId: product.id)));
@@ -82,7 +82,7 @@ class ProductCard extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () => isAuthenticated ? onQuickAdd() : requireAuth(context),
+            onPressed: () => _openDetail(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.bg,
@@ -90,7 +90,7 @@ class ProductCard extends StatelessWidget {
               shape: const StadiumBorder(),
               elevation: 0,
             ),
-            child: const Text('+ QUICK ADD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.6)),
+            child: const Text('SELECT SIZE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.6)),
           ),
         ),
         const SizedBox(height: 8),
