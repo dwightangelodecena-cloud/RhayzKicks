@@ -4,10 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/store_repository.dart';
 import '../models/database_models.dart';
 
-// Cart/wishlist state backed by Supabase (`cart_items`/`wishlist_items`), one
-// row per logged-in customer, shared with the web app. A Realtime
-// subscription keeps this in sync when the same customer edits their bag or
-// wishlist on the other app. Mirrors web's ShopContext.
+// Cart/wishlist state, one row per logged-in customer, shared with the web
+// app. Reads/writes go through the Laravel API (store_repository.dart); the
+// Realtime subscription below still talks to Supabase directly and fires on
+// the underlying Postgres row change regardless of who wrote it, keeping
+// this in sync when the same customer edits their bag or wishlist on the
+// other app. Mirrors web's ShopContext.
 class ShopController extends ChangeNotifier {
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -98,9 +100,9 @@ class ShopController extends ChangeNotifier {
     if (customerId == null) return;
     final existing = _cart.where((l) => l.variantId == variantId).firstOrNull;
     if (existing != null) {
-      await _client.from('cart_items').update({'quantity': existing.qty + 1}).eq('id', existing.id);
+      await updateCartItemQty(existing.id, existing.qty + 1);
     } else {
-      await _client.from('cart_items').insert({'customer_id': customerId, 'variant_id': variantId, 'quantity': 1});
+      await addCartItem(customerId, variantId);
     }
     await _refreshCart();
   }
@@ -108,7 +110,7 @@ class ShopController extends ChangeNotifier {
   Future<void> removeFromCart(String productId, {String? size, String? colorway}) async {
     final line = _cart.where((l) => l.product.id == productId && l.size == size && l.colorway == colorway).firstOrNull;
     if (line == null) return;
-    await _client.from('cart_items').delete().eq('id', line.id);
+    await removeCartItem(line.id);
     await _refreshCart();
   }
 
@@ -119,7 +121,7 @@ class ShopController extends ChangeNotifier {
     }
     final line = _cart.where((l) => l.product.id == productId && l.size == size && l.colorway == colorway).firstOrNull;
     if (line == null) return;
-    await _client.from('cart_items').update({'quantity': qty}).eq('id', line.id);
+    await updateCartItemQty(line.id, qty);
     await _refreshCart();
   }
 
@@ -129,9 +131,9 @@ class ShopController extends ChangeNotifier {
     final customerId = _customerId;
     if (customerId == null) return;
     if (isWishlisted(product.id)) {
-      await _client.from('wishlist_items').delete().eq('customer_id', customerId).eq('item_id', product.id);
+      await removeWishlistItem(customerId, product.id);
     } else {
-      await _client.from('wishlist_items').insert({'customer_id': customerId, 'item_id': product.id});
+      await addWishlistItem(customerId, product.id);
     }
     await _refreshWishlist();
   }

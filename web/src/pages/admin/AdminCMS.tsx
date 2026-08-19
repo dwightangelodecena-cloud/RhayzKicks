@@ -32,10 +32,10 @@ function clampPreviewWidth(px: number) {
 }
 
 const sections = [
-  { key: 'banners', label: 'Hero & Banners', icon: IconMegaphone, Component: AdminBanners },
-  { key: 'collections', label: 'Collections', icon: IconLayers, Component: AdminCollections },
-  { key: 'categories', label: 'Categories', icon: IconTags, Component: AdminCategories },
-  { key: 'products', label: 'Products', icon: IconBox, Component: AdminProducts },
+  { key: 'banners', label: 'Hero & Banners', icon: IconMegaphone, Component: AdminBanners, previewPath: '/' },
+  { key: 'collections', label: 'Collections', icon: IconLayers, Component: AdminCollections, previewPath: '/collections' },
+  { key: 'categories', label: 'Categories', icon: IconTags, Component: AdminCategories, previewPath: '/' },
+  { key: 'products', label: 'Products', icon: IconBox, Component: AdminProducts, previewPath: '/' },
 ] as const
 
 type SectionKey = (typeof sections)[number]['key']
@@ -497,7 +497,10 @@ function AdminCMSInner() {
               <button
                 key={s.key}
                 className={`rk-cms-subnav-item ${section === s.key ? 'rk-cms-subnav-item-active' : ''}`}
-                onClick={() => setSection(s.key)}
+                onClick={() => {
+                  setSection(s.key)
+                  setPreviewPath(s.previewPath)
+                }}
               >
                 <Icon size={16} /> {s.label}
               </button>

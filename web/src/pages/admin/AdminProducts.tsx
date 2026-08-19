@@ -93,6 +93,8 @@ export default function AdminProducts() {
   const [draftHistory, setDraftHistory] = useState<ItemRow[]>([])
   const { setSession } = useEditSession()
 
+  const [categoryOptions, setCategoryOptions] = useState<{ slug: string; label: string }[]>([])
+
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [variants, setVariants] = useState<VariantRow[]>([])
   const [inventoryBySku, setInventoryBySku] = useState<Record<string, InventoryRow>>({})
@@ -152,6 +154,14 @@ export default function AdminProducts() {
 
   useEffect(() => {
     load()
+  }, [])
+
+  useEffect(() => {
+    supabase
+      .from('nav_categories')
+      .select('slug, label')
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => setCategoryOptions((data ?? []) as { slug: string; label: string }[]))
   }, [])
 
   const addItem = async () => {
@@ -734,7 +744,10 @@ export default function AdminProducts() {
               </label>
               <label className="rk-field">
                 <span className="rk-field-label">Category</span>
-                <input placeholder="e.g. running" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
+                <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+                  <option value="" disabled>Select a category</option>
+                  {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                </select>
               </label>
               <label className="rk-field">
                 <span className="rk-field-label">Gender</span>
@@ -831,7 +844,9 @@ export default function AdminProducts() {
                               </label>
                               <label className="rk-field">
                                 <span className="rk-field-label">Category</span>
-                                <input value={draft.category} onChange={(e) => updateDraft({ category: e.target.value })} />
+                                <select value={draft.category} onChange={(e) => updateDraft({ category: e.target.value })}>
+                                  {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                                </select>
                               </label>
                               <label className="rk-field">
                                 <span className="rk-field-label">Gender</span>

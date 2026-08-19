@@ -1,6 +1,6 @@
-// Mirrors web/src/lib/storeData.ts — every function here reads the exact
-// same Supabase tables/columns the web admin manages. There is no
-// mobile-specific content or admin UI; mobile only ever reads.
+// Mirrors web/src/lib/storeData.ts — storefront content (products,
+// categories, collections) reads the exact same Supabase tables/columns the
+// web admin manages; there is no mobile-specific content or admin UI for it.
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -103,46 +103,83 @@ Future<ProductDetail?> getProductDetail(String id) async {
   );
 }
 
-Future<List<Product>> getProductsByIds(List<String> ids) async {
-  if (ids.isEmpty) return [];
-  final rows = await _client.from('items').select(_itemColumns).eq('is_active', true).inFilter('id', ids);
-  return (rows as List).map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
-}
-
+// Cart/wishlist reads and writes go through the Laravel API. Realtime sync
+// (see ShopController._subscribe) still watches Supabase directly — it
+// fires on the Postgres row change regardless of who wrote it.
 Future<List<CartLine>> getCartLines(String customerId) async {
-  final rows = await _client.from('cart_items').select('id, variant_id, quantity').eq('customer_id', customerId);
-  final cartRows = rows as List;
-  if (cartRows.isEmpty) return [];
-
-  final variantIds = cartRows.map((r) => r['variant_id'] as String).toList();
-  final variantRows = await _client.from('item_variants').select('id, item_id, size, color').inFilter('id', variantIds);
-  final variantById = {for (final v in variantRows as List) v['id'] as String: v};
-
-  final itemIds = {for (final v in variantRows) v['item_id'] as String}.toList();
-  final products = await getProductsByIds(itemIds);
-  final productById = {for (final p in products) p.id: p};
-
-  final lines = <CartLine>[];
-  for (final row in cartRows) {
-    final variant = variantById[row['variant_id']];
-    final product = variant != null ? productById[variant['item_id']] : null;
-    if (variant == null || product == null) continue;
-    lines.add(CartLine(
+  final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/cart/$customerId'));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to load cart: ${response.statusCode}');
+  }
+  final rows = jsonDecode(response.body) as List;
+  return rows.map((r) {
+    final row = r as Map<String, dynamic>;
+    final variant = row['variant'] as Map<String, dynamic>;
+    return CartLine(
       id: row['id'] as String,
-      product: product,
+      product: Product.fromMap(row['product'] as Map<String, dynamic>),
       qty: row['quantity'] as int,
       size: variant['size'] as String,
       colorway: variant['color'] as String,
       variantId: variant['id'] as String,
-    ));
+    );
+  }).toList();
+}
+
+Future<void> addCartItem(String customerId, String variantId) async {
+  final response = await http.post(
+    Uri.parse('${ApiConfig.baseUrl}/cart'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'customer_id': customerId, 'variant_id': variantId}),
+  );
+  if (response.statusCode != 201) {
+    throw Exception('Failed to add to cart: ${response.statusCode}');
   }
-  return lines;
+}
+
+Future<void> updateCartItemQty(String cartLineId, int qty) async {
+  final response = await http.put(
+    Uri.parse('${ApiConfig.baseUrl}/cart/$cartLineId'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'quantity': qty}),
+  );
+  if (response.statusCode != 200) {
+    throw Exception('Failed to update cart item: ${response.statusCode}');
+  }
+}
+
+Future<void> removeCartItem(String cartLineId) async {
+  final response = await http.delete(Uri.parse('${ApiConfig.baseUrl}/cart/$cartLineId'));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to remove cart item: ${response.statusCode}');
+  }
 }
 
 Future<List<Product>> getWishlistProducts(String customerId) async {
-  final rows = await _client.from('wishlist_items').select('item_id').eq('customer_id', customerId);
-  final itemIds = (rows as List).map((r) => r['item_id'] as String).toList();
-  return getProductsByIds(itemIds);
+  final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/wishlist/$customerId'));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to load wishlist: ${response.statusCode}');
+  }
+  final rows = jsonDecode(response.body) as List;
+  return rows.map((r) => Product.fromMap(r as Map<String, dynamic>)).toList();
+}
+
+Future<void> addWishlistItem(String customerId, String itemId) async {
+  final response = await http.post(
+    Uri.parse('${ApiConfig.baseUrl}/wishlist'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'customer_id': customerId, 'item_id': itemId}),
+  );
+  if (response.statusCode != 201) {
+    throw Exception('Failed to add to wishlist: ${response.statusCode}');
+  }
+}
+
+Future<void> removeWishlistItem(String customerId, String itemId) async {
+  final response = await http.delete(Uri.parse('${ApiConfig.baseUrl}/wishlist/$customerId/$itemId'));
+  if (response.statusCode != 200) {
+    throw Exception('Failed to remove from wishlist: ${response.statusCode}');
+  }
 }
 
 Future<List<NavCategory>> getNavCategories() async {
