@@ -217,7 +217,7 @@ function AdminCMSInner() {
           font-weight: 700;
           cursor: pointer;
           white-space: nowrap;
-          transition: opacity 0.15s ease, background-color 0.15s ease;
+          transition: opacity var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
         }
         .rk-cms-topbar-btn:hover:not(:disabled) {
           background: var(--bg-secondary);
@@ -261,7 +261,7 @@ function AdminCMSInner() {
           font-weight: 700;
           cursor: pointer;
           white-space: nowrap;
-          transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+          transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
         }
         .rk-cms-subnav-item svg {
           flex-shrink: 0;
@@ -437,7 +437,7 @@ function AdminCMSInner() {
             height: 2.5rem;
             border-radius: 999px;
             background: var(--border);
-            transition: background-color 0.15s ease, height 0.15s ease;
+            transition: background-color var(--duration-fast) var(--ease-out), height var(--duration-fast) var(--ease-out);
           }
           .rk-cms-resize-handle:hover::before,
           .rk-cms-resize-handle-dragging::before {
@@ -512,7 +512,7 @@ function AdminCMSInner() {
           className="rk-cms-layout"
           style={previewOpen ? ({ '--cms-preview-width': `${previewWidth}px` } as CSSProperties) : undefined}
         >
-        <div className="rk-cms-editor">
+        <div className="rk-cms-editor rk-animate-fade-in" key={section}>
           <ActiveComponent />
         </div>
 

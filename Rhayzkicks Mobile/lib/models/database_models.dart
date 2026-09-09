@@ -81,6 +81,41 @@ class HeroSlide {
       );
 }
 
+// promo_banner_settings — the homepage membership promo banner, same
+// singleton row the web admin's "Promotional Banner" card manages.
+class PromoBannerContent {
+  final String? imageUrl;
+  final String label;
+  final String headline;
+  final String subtext;
+  final String primaryCtaLabel;
+  final String primaryCtaLink;
+  final String? secondaryCtaLabel;
+  final String? secondaryCtaLink;
+
+  PromoBannerContent({
+    this.imageUrl,
+    required this.label,
+    required this.headline,
+    required this.subtext,
+    required this.primaryCtaLabel,
+    required this.primaryCtaLink,
+    this.secondaryCtaLabel,
+    this.secondaryCtaLink,
+  });
+
+  factory PromoBannerContent.fromMap(Map<String, dynamic> row) => PromoBannerContent(
+        imageUrl: (row['image_url'] as String?)?.isNotEmpty == true ? row['image_url'] as String : null,
+        label: row['label'] ?? '',
+        headline: row['headline'] ?? '',
+        subtext: row['subtext'] ?? '',
+        primaryCtaLabel: row['primary_cta_label'] ?? '',
+        primaryCtaLink: row['primary_cta_link'] ?? '/join',
+        secondaryCtaLabel: row['secondary_cta_label'],
+        secondaryCtaLink: row['secondary_cta_link'],
+      );
+}
+
 // announcements — the top ticker strip, same rows the web header ticker reads.
 class Announcement {
   final String id;

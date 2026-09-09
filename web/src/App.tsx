@@ -13,6 +13,7 @@ import HelpPage from './pages/HelpPage'
 import AccountPage from './pages/AccountPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
 import AuthPage from './pages/AuthPage'
+import AppPromoPage from './pages/AppPromoPage'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import StaffSignup from './pages/admin/StaffSignup'
@@ -43,6 +44,7 @@ function App() {
                 </Route>
                 <Route path="/signin" element={<AuthPage />} />
                 <Route path="/join" element={<AuthPage />} />
+                <Route path="/app" element={<AppPromoPage />} />
                 <Route path="/admin" element={<AdminLogin />} />
                 <Route path="/staff/signup" element={<StaffSignup />} />
                 <Route

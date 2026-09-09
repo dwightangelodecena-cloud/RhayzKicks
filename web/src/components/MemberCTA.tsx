@@ -1,6 +1,10 @@
+import { useNavigate } from 'react-router-dom'
 import Logo from './Logo'
 
+const APP_PROMO_URL = '/app'
+
 export default function MemberCTA() {
+  const navigate = useNavigate()
   return (
     <section className="rk-member-cta">
       <style>{`
@@ -83,7 +87,9 @@ export default function MemberCTA() {
         every new Rhayz Kicks drop.
       </p>
       <div className="rk-member-ctas">
-        <button className="rk-member-btn-primary">Join Free Today</button>
+        <button className="rk-member-btn-primary" onClick={() => navigate(APP_PROMO_URL)}>
+          Join Free Today
+        </button>
         <button className="rk-member-btn-outline">Learn More</button>
       </div>
     </section>

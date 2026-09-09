@@ -39,6 +39,19 @@ interface HeroSlideRow {
   is_active: boolean
 }
 
+interface PromoBannerRow {
+  id: boolean
+  is_active: boolean
+  image_url: string | null
+  label: string
+  headline: string
+  subtext: string
+  primary_cta_label: string
+  primary_cta_link: string
+  secondary_cta_label: string | null
+  secondary_cta_link: string | null
+}
+
 const emptySlideForm = {
   eyebrow: '',
   headline: '',
@@ -61,6 +74,9 @@ function reorder<T extends { id: string; sort_order: number }>(list: T[], id: st
 export default function AdminBanners() {
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([])
   const [slides, setSlides] = useState<HeroSlideRow[]>([])
+  const [promoBanner, setPromoBanner] = useState<PromoBannerRow | null>(null)
+  const [promoDraft, setPromoDraft] = useState<PromoBannerRow | null>(null)
+  const [editingPromo, setEditingPromo] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,17 +92,19 @@ export default function AdminBanners() {
   const load = async () => {
     setLoading(true)
     setError(null)
-    const [announcementsRes, slidesRes] = await Promise.all([
+    const [announcementsRes, slidesRes, promoRes] = await Promise.all([
       supabase.from('announcements').select('*').order('sort_order', { ascending: true }),
       supabase.from('hero_slides').select('*').order('sort_order', { ascending: true }),
+      supabase.from('promo_banner_settings').select('*').eq('id', true).maybeSingle(),
     ])
-    if (announcementsRes.error || slidesRes.error) {
-      setError((announcementsRes.error ?? slidesRes.error)?.message ?? 'Failed to load.')
+    if (announcementsRes.error || slidesRes.error || promoRes.error) {
+      setError((announcementsRes.error ?? slidesRes.error ?? promoRes.error)?.message ?? 'Failed to load.')
       setLoading(false)
       return
     }
     setAnnouncements((announcementsRes.data ?? []) as AnnouncementRow[])
     setSlides((slidesRes.data ?? []) as HeroSlideRow[])
+    setPromoBanner((promoRes.data ?? null) as PromoBannerRow | null)
     setLoading(false)
   }
 
@@ -94,7 +112,14 @@ export default function AdminBanners() {
     load()
   }, [])
 
-  const { record } = useUndoLog({ sessionLabel: 'Hero & Banners', previewPath: '/', onAfterUndo: load })
+  const active =
+    editingSlide && slideDraft
+      ? { label: `Hero Slide — ${slideDraft.headline || 'Untitled'}`, previewPath: '/' }
+      : editingPromo && promoDraft
+        ? { label: 'Promo Banner', previewPath: '/' }
+        : null
+
+  const { record } = useUndoLog({ sessionLabel: 'Hero & Banners', previewPath: '/', onAfterUndo: load, active })
 
   const addAnnouncement = async () => {
     if (!newAnnouncement.trim()) return
@@ -243,6 +268,64 @@ export default function AdminBanners() {
         await supabase.from('hero_slides').insert(previous)
       })
     }
+    load()
+  }
+
+  const startEditPromo = () => {
+    if (!promoBanner) return
+    setEditingPromo(true)
+    setPromoDraft({ ...promoBanner })
+  }
+
+  const savePromo = async () => {
+    if (!promoDraft) return
+    const previous = promoBanner
+    const { error: updateError } = await supabase
+      .from('promo_banner_settings')
+      .update({
+        image_url: promoDraft.image_url,
+        label: promoDraft.label,
+        headline: promoDraft.headline,
+        subtext: promoDraft.subtext,
+        primary_cta_label: promoDraft.primary_cta_label,
+        primary_cta_link: promoDraft.primary_cta_link,
+        secondary_cta_label: promoDraft.secondary_cta_label || null,
+        secondary_cta_link: promoDraft.secondary_cta_link || null,
+      })
+      .eq('id', true)
+    if (updateError) return setError(updateError.message)
+    if (previous) {
+      record('Edit promo banner', async () => {
+        await supabase
+          .from('promo_banner_settings')
+          .update({
+            image_url: previous.image_url,
+            label: previous.label,
+            headline: previous.headline,
+            subtext: previous.subtext,
+            primary_cta_label: previous.primary_cta_label,
+            primary_cta_link: previous.primary_cta_link,
+            secondary_cta_label: previous.secondary_cta_label,
+            secondary_cta_link: previous.secondary_cta_link,
+          })
+          .eq('id', true)
+      })
+    }
+    setEditingPromo(false)
+    setPromoDraft(null)
+    load()
+  }
+
+  const togglePromoActive = async () => {
+    if (!promoBanner) return
+    const { error: updateError } = await supabase
+      .from('promo_banner_settings')
+      .update({ is_active: !promoBanner.is_active })
+      .eq('id', true)
+    if (updateError) return setError(updateError.message)
+    record(promoBanner.is_active ? 'Hide promo banner' : 'Show promo banner', async () => {
+      await supabase.from('promo_banner_settings').update({ is_active: promoBanner.is_active }).eq('id', true)
+    })
     load()
   }
 
@@ -568,6 +651,92 @@ export default function AdminBanners() {
               </div>
             )
           })
+        )}
+      </div>
+
+      <div className="rk-admin-card">
+        <div className="rk-admin-card-head">
+          <div>
+            <h2 className="rk-admin-card-title"><IconMegaphone /> Promotional Banner</h2>
+            <p className="rk-admin-card-desc">The membership promo banner shown between sections on the homepage.</p>
+          </div>
+          {promoBanner && (
+            <button
+              className={`rk-admin-badge ${promoBanner.is_active ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
+              style={{ border: 'none', cursor: 'pointer' }}
+              onClick={togglePromoActive}
+            >
+              {promoBanner.is_active ? 'Live' : 'Hidden'}
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <p className="rk-admin-empty">Loading…</p>
+        ) : !promoBanner ? (
+          <p className="rk-admin-empty">Promo banner settings not found.</p>
+        ) : editingPromo && promoDraft ? (
+          <div className="rk-admin-form-panel">
+            <div className="rk-slide-edit-grid">
+              <label className="rk-field">
+                <span className="rk-field-label">Label</span>
+                <input value={promoDraft.label} onChange={(e) => setPromoDraft({ ...promoDraft, label: e.target.value })} />
+              </label>
+              <label className="rk-field">
+                <span className="rk-field-label">Headline</span>
+                <input value={promoDraft.headline} onChange={(e) => setPromoDraft({ ...promoDraft, headline: e.target.value })} />
+              </label>
+              <label className="rk-field rk-slide-edit-full">
+                <span className="rk-field-label">Subtext</span>
+                <textarea rows={2} value={promoDraft.subtext} onChange={(e) => setPromoDraft({ ...promoDraft, subtext: e.target.value })} />
+              </label>
+              <label className="rk-field rk-slide-edit-full">
+                <span className="rk-field-label">Background image</span>
+                <div className="rk-field-upload-row">
+                  {promoDraft.image_url && <img className="rk-field-thumb" src={promoDraft.image_url} alt="" />}
+                  <ImageUploadButton label={promoDraft.image_url ? 'Change Image' : '+ Upload Image'} aspect={12 / 5} onUploaded={(url) => setPromoDraft({ ...promoDraft, image_url: url })} />
+                </div>
+              </label>
+              <label className="rk-field">
+                <span className="rk-field-label">Primary button label</span>
+                <input value={promoDraft.primary_cta_label} onChange={(e) => setPromoDraft({ ...promoDraft, primary_cta_label: e.target.value })} />
+              </label>
+              <label className="rk-field">
+                <span className="rk-field-label">Primary button link</span>
+                <input value={promoDraft.primary_cta_link} onChange={(e) => setPromoDraft({ ...promoDraft, primary_cta_link: e.target.value })} />
+              </label>
+              <label className="rk-field">
+                <span className="rk-field-label">Secondary button label (optional)</span>
+                <input value={promoDraft.secondary_cta_label ?? ''} onChange={(e) => setPromoDraft({ ...promoDraft, secondary_cta_label: e.target.value })} />
+              </label>
+              <label className="rk-field">
+                <span className="rk-field-label">Secondary button link (optional)</span>
+                <input value={promoDraft.secondary_cta_link ?? ''} onChange={(e) => setPromoDraft({ ...promoDraft, secondary_cta_link: e.target.value })} />
+              </label>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <button className="rk-admin-icon-btn" onClick={() => { setEditingPromo(false); setPromoDraft(null) }} aria-label="Cancel">✕</button>
+              <button className="rk-admin-add-btn" onClick={savePromo}>Save Banner</button>
+            </div>
+          </div>
+        ) : (
+          <div className="rk-slide-card">
+            <div className="rk-slide-thumb">
+              {promoBanner.image_url ? <img src={promoBanner.image_url} alt="" /> : null}
+            </div>
+            <div className="rk-slide-body">
+              <div className="rk-slide-eyebrow">{promoBanner.label}</div>
+              <div className="rk-slide-headline">{promoBanner.headline}</div>
+              <div className="rk-slide-subtext">{promoBanner.subtext}</div>
+              <div className="rk-slide-ctas">
+                {promoBanner.primary_cta_label && <span className="rk-slide-cta-chip">{promoBanner.primary_cta_label}</span>}
+                {promoBanner.secondary_cta_label && <span className="rk-slide-cta-chip">{promoBanner.secondary_cta_label}</span>}
+              </div>
+            </div>
+            <div className="rk-slide-actions">
+              <button className="rk-admin-icon-btn" onClick={startEditPromo} aria-label="Edit"><EditIcon /></button>
+            </div>
+          </div>
         )}
       </div>
     </div>

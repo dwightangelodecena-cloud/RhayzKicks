@@ -8,6 +8,10 @@ export const adminCardStyles = `
     padding: 1.5rem;
     margin-bottom: 1.5rem;
     box-shadow: var(--shadow-elevated);
+    transition: box-shadow var(--duration-base) var(--ease-out);
+  }
+  .rk-admin-card:hover {
+    box-shadow: var(--shadow-md);
   }
   .rk-admin-card-title {
     display: flex;
@@ -51,7 +55,7 @@ export const adminCardStyles = `
     border-radius: 0.75rem;
     padding: 0.875rem 1rem;
     margin-bottom: 0.625rem;
-    transition: background-color 0.15s ease;
+    transition: background-color var(--duration-fast) var(--ease-out);
   }
   .rk-admin-row span {
     flex: 1;
@@ -73,7 +77,7 @@ export const adminCardStyles = `
     padding: 0.375rem;
     border-radius: 0.5rem;
     display: flex;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
   }
   .rk-admin-icon-btn:hover {
     color: var(--text);
@@ -91,7 +95,7 @@ export const adminCardStyles = `
     background: var(--bg);
     color: var(--text);
     font-size: 0.875rem;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   }
   .rk-admin-add-input:focus,
   .rk-admin-row input:focus {
@@ -112,7 +116,7 @@ export const adminCardStyles = `
     text-transform: uppercase;
     cursor: pointer;
     white-space: nowrap;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
   }
   .rk-admin-add-btn:hover,
   .rk-admin-primary-btn:hover {
@@ -164,7 +168,7 @@ export const adminCardStyles = `
     vertical-align: middle;
   }
   .rk-admin-table tbody tr {
-    transition: background-color 0.12s ease;
+    transition: background-color var(--duration-fast) var(--ease-out);
   }
   .rk-admin-table tbody tr:hover {
     background: var(--bg-secondary);
@@ -260,7 +264,7 @@ export const adminCardStyles = `
     font-size: 0.8125rem;
     background: var(--bg);
     color: var(--text);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   }
   .rk-admin-form-grid input:focus,
   .rk-admin-form-grid select:focus,

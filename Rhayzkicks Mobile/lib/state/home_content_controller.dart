@@ -15,12 +15,14 @@ class HomeContentController extends ChangeNotifier {
   List<Collection> _collections = [];
   List<Announcement> _announcements = [];
   List<NavCategory> _navCategories = [];
+  PromoBannerContent? _promoBanner;
   bool _isLoading = true;
 
   List<HeroSlide> get heroSlides => _heroSlides;
   List<Collection> get collections => _collections;
   List<Announcement> get announcements => _announcements;
   List<NavCategory> get navCategories => _navCategories;
+  PromoBannerContent? get promoBanner => _promoBanner;
   bool get isLoading => _isLoading;
 
   Future<void> load() async {
@@ -61,6 +63,17 @@ class HomeContentController extends ChangeNotifier {
           })
           .catchError((_) {
             _navCategories = <NavCategory>[];
+          }),
+      client
+          .from('promo_banner_settings')
+          .select()
+          .eq('id', true)
+          .maybeSingle()
+          .then((row) {
+            _promoBanner = (row != null && row['is_active'] == true) ? PromoBannerContent.fromMap(row) : null;
+          })
+          .catchError((_) {
+            _promoBanner = null;
           }),
     ]);
     _isLoading = false;

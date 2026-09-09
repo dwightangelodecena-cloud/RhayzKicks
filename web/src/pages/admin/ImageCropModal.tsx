@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ImageCropModalProps {
   file: File
@@ -103,7 +104,7 @@ export default function ImageCropModal({ file, aspect, onSave, onDiscard }: Imag
     }, 'image/jpeg', 0.92)
   }
 
-  return (
+  return createPortal(
     <div className="rk-crop-overlay">
       <style>{`
         .rk-crop-overlay {
@@ -230,6 +231,7 @@ export default function ImageCropModal({ file, aspect, onSave, onDiscard }: Imag
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

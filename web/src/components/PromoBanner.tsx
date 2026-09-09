@@ -1,9 +1,27 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ImgSlot from './ImgSlot'
 import Logo from './Logo'
+import { useInView } from '../hooks/useInView'
+import { getPromoBanner, type PromoBannerContent } from '../lib/storeData'
 
 export default function PromoBanner() {
+  const navigate = useNavigate()
+  const [content, setContent] = useState<PromoBannerContent | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [ref, isInView] = useInView<HTMLElement>()
+
+  useEffect(() => {
+    getPromoBanner()
+      .then(setContent)
+      .catch(() => setContent(null))
+      .finally(() => setLoaded(true))
+  }, [])
+
+  if (!loaded || !content) return null
+
   return (
-    <section className="rk-promo">
+    <section ref={ref} className={`rk-promo ${isInView ? 'rk-animate-fade-up' : ''}`} style={{ opacity: isInView ? undefined : 0 }}>
       <style>{`
         .rk-promo {
           position: relative;
@@ -104,23 +122,22 @@ export default function PromoBanner() {
         }
       `}</style>
       <div className="rk-promo-bg">
-        <ImgSlot label="Promo Background" size="1200 × 500 px" />
+        <ImgSlot label="Promo Background" size="1200 × 500 px" src={content.imageUrl} />
       </div>
       <div className="rk-promo-content">
         <Logo size={124} ring ringColor="var(--accent-red)" ringOffset={2} className="rk-promo-logo" />
-        <p className="rk-promo-label">Members Only</p>
-        <h2 className="rk-promo-headline">
-          LIMITED DROPS
-          <br />
-          EVERY WEEK
-        </h2>
-        <p className="rk-promo-subtext">
-          Get early access to the most anticipated releases. Join Rhayz Kicks Members and never miss
-          a drop again.
-        </p>
+        <p className="rk-promo-label">{content.label}</p>
+        <h2 className="rk-promo-headline">{content.headline}</h2>
+        <p className="rk-promo-subtext">{content.subtext}</p>
         <div className="rk-promo-ctas">
-          <button className="rk-promo-btn-primary">Join Free</button>
-          <button className="rk-promo-btn-outline">Notify Me</button>
+          <button className="rk-promo-btn-primary" onClick={() => navigate(content.primaryCtaLink)}>
+            {content.primaryCtaLabel}
+          </button>
+          {content.secondaryCtaLabel && (
+            <button className="rk-promo-btn-outline" onClick={() => navigate(content.secondaryCtaLink ?? '/')}>
+              {content.secondaryCtaLabel}
+            </button>
+          )}
         </div>
       </div>
     </section>

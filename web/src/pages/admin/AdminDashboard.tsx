@@ -107,6 +107,7 @@ export default function AdminDashboard() {
           gap: 0.125rem;
         }
         .rk-admin-nav-item {
+          position: relative;
           display: flex;
           align-items: center;
           gap: 0.75rem;
@@ -120,7 +121,19 @@ export default function AdminDashboard() {
           font-weight: 600;
           cursor: pointer;
           text-align: left;
-          transition: background-color 0.15s ease, color 0.15s ease;
+          transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-admin-nav-item::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 50%;
+          transform: translateY(-50%) scaleY(0);
+          width: 3px;
+          height: 60%;
+          border-radius: 3px;
+          background: var(--accent-red);
+          transition: transform var(--duration-base) var(--ease-out);
         }
         .rk-admin-nav-item svg {
           flex-shrink: 0;
@@ -129,10 +142,14 @@ export default function AdminDashboard() {
         .rk-admin-nav-item:hover {
           background: rgba(255, 255, 255, 0.06);
           color: #fff;
+          transform: translateX(2px);
         }
         .rk-admin-nav-item-active {
           background: rgba(254, 0, 0, 0.14);
           color: #fff;
+        }
+        .rk-admin-nav-item-active::before {
+          transform: translateY(-50%) scaleY(1);
         }
         .rk-admin-nav-item-active svg {
           color: var(--accent-red);
@@ -197,7 +214,7 @@ export default function AdminDashboard() {
           font-weight: 700;
           cursor: pointer;
           text-align: left;
-          transition: background-color 0.15s ease, color 0.15s ease;
+          transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
         }
         .rk-admin-sidebar-action:hover {
           background: rgba(255, 255, 255, 0.06);
@@ -345,7 +362,7 @@ export default function AdminDashboard() {
           <h1 className="rk-admin-header-title">{activeTab?.label}</h1>
           <div className="rk-admin-header-blurb">{activeTab?.blurb}</div>
         </header>
-        <div className="rk-admin-content">
+        <div className="rk-admin-content rk-animate-fade-in" key={tab}>
           {tab === 'Overview' && <AdminOverview />}
           {tab === 'Sales' && <AdminSalesPOS />}
           {tab === 'Inventory' && <AdminInventory />}

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ImgSlot from './ImgSlot'
+import { useInView } from '../hooks/useInView'
 import { getNavCategories, type NavCategory } from '../lib/storeData'
 
 export default function ShopByActivity() {
   const [categories, setCategories] = useState<NavCategory[]>([])
   const scrollerRef = useRef<HTMLDivElement>(null)
+  const [ref, isInView] = useInView<HTMLElement>()
 
   useEffect(() => {
     getNavCategories().then(setCategories).catch(() => setCategories([]))
@@ -18,7 +20,7 @@ export default function ShopByActivity() {
   if (categories.length === 0) return null
 
   return (
-    <section className="rk-activity-section">
+    <section ref={ref} className={`rk-activity-section ${isInView ? 'rk-animate-fade-up' : ''}`} style={{ opacity: isInView ? undefined : 0 }}>
       <style>{`
         .rk-activity-section {
           padding: 3rem 1rem;

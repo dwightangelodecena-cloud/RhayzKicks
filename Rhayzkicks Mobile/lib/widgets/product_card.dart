@@ -37,44 +37,50 @@ class ProductCard extends StatelessWidget {
       children: [
         AspectRatio(
           aspectRatio: 4 / 3,
-          child: GestureDetector(
-            onTap: () => _openDetail(context),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                NetworkImageOrSlot(imageUrl: product.imageUrl, label: product.name, size: '400 x 300 px'),
-                if (badge != null)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      color: colors.text,
-                      child: Text(
-                        badge.toUpperCase(),
-                        style: TextStyle(color: colors.bg, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _openDetail(context),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    NetworkImageOrSlot(imageUrl: product.imageUrl, label: product.name, size: '400 x 300 px'),
+                    if (badge != null)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          color: colors.text,
+                          child: Text(
+                            badge.toUpperCase(),
+                            style: TextStyle(color: colors.bg, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: InkWell(
+                        onTap: () => isAuthenticated ? context.read<ShopController>().toggleWishlist(product) : requireAuth(context),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(color: colors.bg, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)]),
+                          child: Icon(
+                            wishlisted ? Icons.favorite : Icons.favorite_border,
+                            size: 16,
+                            color: wishlisted ? colors.accentRed : colors.text,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: InkWell(
-                    onTap: () => isAuthenticated ? context.read<ShopController>().toggleWishlist(product) : requireAuth(context),
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(color: colors.bg, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)]),
-                      child: Icon(
-                        wishlisted ? Icons.favorite : Icons.favorite_border,
-                        size: 16,
-                        color: wishlisted ? colors.accentRed : colors.text,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

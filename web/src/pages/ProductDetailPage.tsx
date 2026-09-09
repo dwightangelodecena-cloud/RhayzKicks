@@ -130,6 +130,10 @@ export default function ProductDetailPage() {
           cursor: pointer;
           background: var(--bg-secondary);
           padding: 0;
+          transition: border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-pdp-thumb:hover {
+          transform: scale(1.04);
         }
         .rk-pdp-thumb img {
           width: 100%;
@@ -181,6 +185,10 @@ export default function ProductDetailPage() {
           cursor: pointer;
           color: var(--text);
           box-shadow: var(--shadow-elevated);
+          transition: transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-pdp-nav-arrow:hover {
+          transform: scale(1.08);
         }
         .rk-pdp-nav-prev {
           right: 3rem;
@@ -253,6 +261,10 @@ export default function ProductDetailPage() {
           cursor: pointer;
           background: var(--bg-secondary);
           padding: 0;
+          transition: border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-pdp-colorway-swatch:hover {
+          transform: scale(1.04);
         }
         .rk-pdp-colorway-swatch img {
           width: 100%;
@@ -279,6 +291,10 @@ export default function ProductDetailPage() {
           font-weight: 700;
           cursor: pointer;
           text-align: center;
+          transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-pdp-size:not(.rk-pdp-size-oos):not(.rk-pdp-size-active):hover {
+          transform: translateY(-1px);
         }
         .rk-pdp-size-active {
           background: var(--text);
@@ -311,6 +327,10 @@ export default function ProductDetailPage() {
           text-transform: uppercase;
           cursor: pointer;
           margin-top: 1.5rem;
+          transition: transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-pdp-add:not(:disabled):hover {
+          transform: translateY(-2px);
         }
         .rk-pdp-add:disabled {
           opacity: 0.5;
@@ -321,6 +341,7 @@ export default function ProductDetailPage() {
           text-align: center;
           font-size: 0.8125rem;
           color: #1a9c4a;
+          animation: rk-fade-up var(--duration-base) var(--ease-out) both;
         }
         .rk-pdp-view-bag {
           display: block;
@@ -434,7 +455,7 @@ export default function ProductDetailPage() {
             >
               <HeartIcon filled={wishlisted} />
             </button>
-            <ImgSlot label={product.name} size="1200 × 900 px" src={activeImage} />
+            <ImgSlot key={activeImage} label={product.name} size="1200 × 900 px" src={activeImage} className="rk-animate-fade-in" />
             {photos.length > 1 && (
               <>
                 <button className="rk-pdp-nav-arrow rk-pdp-nav-prev" onClick={prevPhoto} aria-label="Previous photo">

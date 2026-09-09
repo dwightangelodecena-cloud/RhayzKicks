@@ -64,7 +64,9 @@ export default function AdminCollections() {
     load()
   }, [])
 
-  const { record } = useUndoLog({ sessionLabel: 'Collections', previewPath: '/collections', onAfterUndo: load })
+  const active = editingId && draft ? { label: `Collection — ${draft.title || 'Untitled'}`, previewPath: '/collections' } : null
+
+  const { record } = useUndoLog({ sessionLabel: 'Collections', previewPath: '/collections', onAfterUndo: load, active })
 
   const addCollection = async () => {
     if (!form.title.trim()) return

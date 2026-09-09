@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
 interface DrawerProps {
   open: boolean
@@ -9,6 +9,15 @@ interface DrawerProps {
 }
 
 export default function Drawer({ open, title, onClose, children, footer }: DrawerProps) {
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [open])
+
   return (
     <>
       <style>{`
@@ -19,7 +28,7 @@ export default function Drawer({ open, title, onClose, children, footer }: Drawe
           z-index: 90;
           opacity: 0;
           pointer-events: none;
-          transition: opacity 0.25s ease;
+          transition: opacity var(--duration-base) var(--ease-out);
         }
         .rk-drawer-overlay-open {
           opacity: 1;
@@ -36,7 +45,7 @@ export default function Drawer({ open, title, onClose, children, footer }: Drawe
           display: flex;
           flex-direction: column;
           transform: translateX(100%);
-          transition: transform 0.3s ease;
+          transition: transform var(--duration-slow) var(--ease-out);
           box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
         }
         .rk-drawer-open {
@@ -71,6 +80,7 @@ export default function Drawer({ open, title, onClose, children, footer }: Drawe
         .rk-drawer-body {
           flex: 1;
           overflow-y: auto;
+          overscroll-behavior: contain;
           padding: 1.5rem;
         }
         .rk-drawer-footer {

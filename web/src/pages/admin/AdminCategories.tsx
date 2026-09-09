@@ -59,7 +59,10 @@ export default function AdminCategories() {
     load()
   }, [])
 
-  const { record } = useUndoLog({ sessionLabel: 'Categories', previewPath: '/', onAfterUndo: load })
+  const active =
+    editingId && draft ? { label: `Category — ${draft.label || 'Untitled'}`, previewPath: `/category/${draft.slug}` } : null
+
+  const { record } = useUndoLog({ sessionLabel: 'Categories', previewPath: '/', onAfterUndo: load, active })
 
   const addCategory = async () => {
     if (!form.label.trim()) return

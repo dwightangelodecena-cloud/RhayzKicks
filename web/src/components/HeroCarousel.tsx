@@ -118,9 +118,11 @@ export default function HeroCarousel() {
           align-items: center;
           justify-content: center;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+          transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
         }
         .rk-hero-arrow:hover {
           background: #ffffff;
+          transform: translateY(-50%) scale(1.08);
         }
         .rk-hero-arrow-left {
           left: 1rem;
@@ -146,6 +148,7 @@ export default function HeroCarousel() {
           background: rgba(255, 255, 255, 0.4);
           cursor: pointer;
           padding: 0;
+          transition: width var(--duration-base) var(--ease-out), background-color var(--duration-base) var(--ease-out);
         }
         .rk-hero-dot:hover {
           background: rgba(255, 255, 255, 0.65);
@@ -165,22 +168,22 @@ export default function HeroCarousel() {
       `}</style>
       <div className="rk-hero-bg">
         {slide.imageUrl ? (
-          <img src={slide.imageUrl} alt="" className="rk-hero-img" />
+          <img key={slide.id} src={slide.imageUrl} alt="" className="rk-hero-img rk-animate-fade-in" />
         ) : (
           <ImgSlot label={`Hero Image ${index + 1} of ${slides.length}`} size="Recommended: 1440 × 820 px" />
         )}
       </div>
       <div className="rk-hero-gradient" />
 
-      <div className="rk-hero-content">
-        <p className="rk-hero-eyebrow">{slide.eyebrow}</p>
-        <h1 className="rk-heading rk-hero-headline">
+      <div className="rk-hero-content" key={slide.id}>
+        <p className="rk-hero-eyebrow rk-animate-fade-up" style={{ animationDelay: '0ms' }}>{slide.eyebrow}</p>
+        <h1 className="rk-heading rk-hero-headline rk-animate-fade-up" style={{ animationDelay: '80ms' }}>
           {slide.headline.split('\n').map((line) => (
             <span key={line} className="rk-hero-line">{line}</span>
           ))}
         </h1>
-        <p className="rk-hero-subtext">{slide.subtext}</p>
-        <div className="rk-hero-ctas">
+        <p className="rk-hero-subtext rk-animate-fade-up" style={{ animationDelay: '160ms' }}>{slide.subtext}</p>
+        <div className="rk-hero-ctas rk-animate-fade-up" style={{ animationDelay: '240ms' }}>
           {slide.primaryCtaLabel && (
             <button className="rk-btn rk-hero-btn-primary" onClick={() => navigate(slide.primaryCtaLink)}>{slide.primaryCtaLabel}</button>
           )}

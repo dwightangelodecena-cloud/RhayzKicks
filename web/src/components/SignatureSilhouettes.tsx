@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ImgSlot from './ImgSlot'
 import { formatPeso } from '../data/catalog'
+import { useInView } from '../hooks/useInView'
 import { getActiveProducts, type Product } from '../lib/storeData'
 import { useShop } from '../context/ShopContext'
 import { useAuth } from '../context/AuthContext'
@@ -20,6 +21,7 @@ export default function SignatureSilhouettes() {
   const { toggleWishlist, isWishlisted } = useShop()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
+  const [ref, isInView] = useInView<HTMLElement>()
 
   useEffect(() => {
     getActiveProducts().then(setProducts).catch(() => setProducts([]))
@@ -33,7 +35,7 @@ export default function SignatureSilhouettes() {
   if (products.length === 0) return null
 
   return (
-    <section className="rk-sil-section">
+    <section ref={ref} className={`rk-sil-section ${isInView ? 'rk-animate-fade-up' : ''}`} style={{ opacity: isInView ? undefined : 0 }}>
       <style>{`
         .rk-sil-section {
           padding: 3rem 1rem;
@@ -72,6 +74,7 @@ export default function SignatureSilhouettes() {
           background: var(--bg);
           color: var(--text);
           border: 1px solid var(--chip-border);
+          transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
         }
         .rk-chip:hover {
           border-color: var(--text);
@@ -94,7 +97,7 @@ export default function SignatureSilhouettes() {
           background: var(--bg);
           border-radius: var(--radius-card);
           overflow: hidden;
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
+          transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out);
         }
         .rk-product-card:hover {
           transform: translateY(-4px);
@@ -212,9 +215,11 @@ export default function SignatureSilhouettes() {
           border: 1px solid var(--chip-border);
           color: var(--text);
           cursor: pointer;
+          transition: border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
         }
         .rk-view-all-btn:hover {
           border-color: var(--text);
+          transform: translateY(-1px);
         }
         @media (min-width: 640px) {
           .rk-product-grid {

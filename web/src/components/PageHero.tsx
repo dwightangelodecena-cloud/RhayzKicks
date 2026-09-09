@@ -49,9 +49,9 @@ export default function PageHero({ eyebrow, title, subtitle, dark }: PageHeroPro
           }
         }
       `}</style>
-      {eyebrow && <div className="rk-page-hero-eyebrow">{eyebrow}</div>}
-      <h1 className="rk-page-hero-title rk-heading">{title}</h1>
-      {subtitle && <p className="rk-page-hero-subtitle">{subtitle}</p>}
+      {eyebrow && <div className="rk-page-hero-eyebrow rk-animate-fade-up" style={{ animationDelay: '0ms' }}>{eyebrow}</div>}
+      <h1 className="rk-page-hero-title rk-heading rk-animate-fade-up" style={{ animationDelay: '60ms' }}>{title}</h1>
+      {subtitle && <p className="rk-page-hero-subtitle rk-animate-fade-up" style={{ animationDelay: '120ms' }}>{subtitle}</p>}
     </div>
   )
 }

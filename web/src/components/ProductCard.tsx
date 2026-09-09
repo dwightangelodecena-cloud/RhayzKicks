@@ -41,6 +41,18 @@ export default function ProductCard({ product, badgeOverride }: ProductCardProps
           position: relative;
           aspect-ratio: 4 / 3;
           cursor: pointer;
+          overflow: hidden;
+          border-radius: var(--radius-sm);
+          transition: box-shadow var(--duration-base) var(--ease-out);
+        }
+        .rk-product-card:hover .rk-product-media {
+          box-shadow: var(--shadow-md);
+        }
+        .rk-product-media img {
+          transition: transform var(--duration-slow) var(--ease-out);
+        }
+        .rk-product-card:hover .rk-product-media img {
+          transform: scale(1.06);
         }
         .rk-product-badge {
           position: absolute;
@@ -71,6 +83,10 @@ export default function ProductCard({ product, badgeOverride }: ProductCardProps
           cursor: pointer;
           color: var(--text);
           box-shadow: var(--shadow-elevated);
+          transition: color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+        }
+        .rk-product-fav:hover {
+          transform: scale(1.1);
         }
         .rk-product-fav-active {
           color: var(--accent-red);
@@ -88,7 +104,7 @@ export default function ProductCard({ product, badgeOverride }: ProductCardProps
           letter-spacing: 0.04em;
           text-transform: uppercase;
           cursor: pointer;
-          transition: transform 0.15s ease;
+          transition: transform var(--duration-fast) var(--ease-out);
         }
         .rk-product-quickadd:hover {
           transform: scale(1.02);

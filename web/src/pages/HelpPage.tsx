@@ -90,7 +90,7 @@ export default function HelpPage() {
         .rk-faq-question svg {
           flex-shrink: 0;
           color: var(--text-faint);
-          transition: transform 0.2s ease;
+          transition: transform var(--duration-base) var(--ease-out);
         }
         .rk-faq-question-open svg {
           transform: rotate(90deg);
@@ -98,7 +98,7 @@ export default function HelpPage() {
         .rk-faq-answer {
           max-height: 0;
           overflow: hidden;
-          transition: max-height 0.25s ease;
+          transition: max-height var(--duration-slow) var(--ease-out);
           color: var(--text-muted);
           font-size: 0.875rem;
         }

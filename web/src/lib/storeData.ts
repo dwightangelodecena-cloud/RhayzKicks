@@ -54,6 +54,17 @@ export interface HeroSlide {
   secondaryCtaLink: string | null
 }
 
+export interface PromoBannerContent {
+  imageUrl: string | null
+  label: string
+  headline: string
+  subtext: string
+  primaryCtaLabel: string
+  primaryCtaLink: string
+  secondaryCtaLabel: string | null
+  secondaryCtaLink: string | null
+}
+
 export interface Collection {
   id: string
   slug: string
@@ -240,6 +251,25 @@ export async function getHeroSlides(): Promise<HeroSlide[]> {
     secondaryCtaLabel: row.secondary_cta_label,
     secondaryCtaLink: row.secondary_cta_link,
   }))
+}
+
+export async function getPromoBanner(): Promise<PromoBannerContent | null> {
+  const { data, error } = await supabase
+    .from('promo_banner_settings')
+    .select('is_active, image_url, label, headline, subtext, primary_cta_label, primary_cta_link, secondary_cta_label, secondary_cta_link')
+    .eq('id', true)
+    .maybeSingle()
+  if (error || !data || !data.is_active) return null
+  return {
+    imageUrl: data.image_url || null,
+    label: data.label,
+    headline: data.headline,
+    subtext: data.subtext,
+    primaryCtaLabel: data.primary_cta_label,
+    primaryCtaLink: data.primary_cta_link,
+    secondaryCtaLabel: data.secondary_cta_label,
+    secondaryCtaLink: data.secondary_cta_link,
+  }
 }
 
 export async function getCollections(opts: { homeOnly?: boolean } = {}): Promise<Collection[]> {

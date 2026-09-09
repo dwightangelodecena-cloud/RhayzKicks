@@ -17,9 +17,14 @@ interface UseUndoLogOptions {
   sessionLabel: string
   previewPath: string
   onAfterUndo: () => void | Promise<void>
+  // Set while a specific item is open for editing, so the preview jumps
+  // there the moment editing starts — not only after the first save/undo
+  // (which is what `sessionLabel`/`previewPath` alone would otherwise wait
+  // for, since a session normally only exists once the undo stack is non-empty).
+  active?: { label: string; previewPath: string } | null
 }
 
-export function useUndoLog({ sessionLabel, previewPath, onAfterUndo }: UseUndoLogOptions) {
+export function useUndoLog({ sessionLabel, previewPath, onAfterUndo, active }: UseUndoLogOptions) {
   const [stack, setStack] = useState<UndoEntry[]>([])
   const { setSession } = useEditSession()
   const stackRef = useRef(stack)
@@ -52,6 +57,18 @@ export function useUndoLog({ sessionLabel, previewPath, onAfterUndo }: UseUndoLo
   }, [onAfterUndo])
 
   useEffect(() => {
+    if (active) {
+      setSession({
+        label: active.label,
+        isDirty: false,
+        canUndo: stack.length > 0,
+        save: () => {},
+        undo: undoOne,
+        reset: undoAll,
+        previewPath: active.previewPath,
+      })
+      return () => setSession(null)
+    }
     if (stack.length === 0) {
       setSession(null)
       return
@@ -67,7 +84,7 @@ export function useUndoLog({ sessionLabel, previewPath, onAfterUndo }: UseUndoLo
     })
     return () => setSession(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stack.length, sessionLabel, previewPath, undoOne, undoAll])
+  }, [stack.length, sessionLabel, previewPath, undoOne, undoAll, active?.label, active?.previewPath])
 
   return { record }
 }

@@ -116,7 +116,7 @@ export default function Footer() {
           transform: rotate(90deg);
         }
         .rk-footer-accordion-btn svg {
-          transition: transform 0.2s ease;
+          transition: transform var(--duration-base) var(--ease-out);
         }
         .rk-footer-accordion-links {
           list-style: none;
@@ -127,7 +127,7 @@ export default function Footer() {
           gap: 0;
           max-height: 0;
           overflow: hidden;
-          transition: max-height 0.3s ease;
+          transition: max-height var(--duration-slow) var(--ease-out);
         }
         .rk-footer-accordion-links-open {
           max-height: 300px;

@@ -19,7 +19,11 @@
   --placeholder-size: #cccccc;
 
   --accent-red: #fe0000;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
   --radius-card: 1rem;
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.1);
   --shadow-elevated: 0 2px 12px rgba(0, 0, 0, 0.08);
 
   /* Sections that are always dark (hero overlay, promo banner, footer) regardless of site theme */
@@ -43,11 +47,22 @@
   --placeholder-size: #4d4d4d;
 
   --accent-red: #fe0000;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
   --radius-card: 1rem;
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.35);
   --shadow-elevated: 0 2px 16px rgba(0, 0, 0, 0.45);
 
   --dark-surface: #000000;
   --dark-surface-text: #ffffff;
+}
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 450ms;
 }
 
 * {
@@ -94,16 +109,69 @@ body {
   font-size: 0.875rem;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: transform var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   white-space: nowrap;
 }
 
 .rk-btn:hover {
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: var(--shadow-md);
 }
 
 .rk-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+@keyframes rk-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rk-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rk-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.rk-animate-fade-up {
+  animation: rk-fade-up var(--duration-slow) var(--ease-out) both;
+}
+
+.rk-animate-fade-in {
+  animation: rk-fade-in var(--duration-slow) var(--ease-out) both;
+}
+
+.rk-animate-scale-in {
+  animation: rk-scale-in var(--duration-base) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rk-animate-fade-up,
+  .rk-animate-fade-in,
+  .rk-animate-scale-in {
+    animation: none;
+  }
 }
 
 .rk-logo-img {

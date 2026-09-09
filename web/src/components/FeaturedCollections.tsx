@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ImgSlot from './ImgSlot'
+import { useInView } from '../hooks/useInView'
 import { getCollections, type Collection } from '../lib/storeData'
 
 export default function FeaturedCollections() {
   const [collections, setCollections] = useState<Collection[]>([])
   const navigate = useNavigate()
+  const [ref, isInView] = useInView<HTMLElement>()
 
   useEffect(() => {
     getCollections({ homeOnly: true }).then(setCollections).catch(() => setCollections([]))
@@ -14,7 +16,7 @@ export default function FeaturedCollections() {
   if (collections.length === 0) return null
 
   return (
-    <section className="rk-fc-section">
+    <section ref={ref} className={`rk-fc-section ${isInView ? 'rk-animate-fade-up' : ''}`} style={{ opacity: isInView ? undefined : 0 }}>
       <style>{`
         .rk-fc-section {
           padding: 5rem 1.5rem;
@@ -39,7 +41,7 @@ export default function FeaturedCollections() {
           overflow: hidden;
           cursor: pointer;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-          transition: box-shadow 0.3s ease, transform 0.3s ease;
+          transition: box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out);
         }
         .rk-collection-card:hover {
           box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.35);
@@ -52,7 +54,7 @@ export default function FeaturedCollections() {
         .rk-collection-img {
           position: absolute;
           inset: 0;
-          transition: transform 0.4s ease;
+          transition: transform var(--duration-slow) var(--ease-out);
         }
         .rk-collection-card:hover .rk-collection-img {
           transform: scale(1.06);

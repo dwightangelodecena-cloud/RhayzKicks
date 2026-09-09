@@ -156,7 +156,7 @@ export default function Header() {
           background: var(--bg);
           padding-top: env(safe-area-inset-top);
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0);
-          transition: box-shadow 0.25s ease;
+          transition: box-shadow var(--duration-base) var(--ease-out);
         }
         .rk-header-scrolled {
           box-shadow: var(--shadow-elevated);
@@ -285,6 +285,7 @@ export default function Header() {
           flex: 1;
         }
         .rk-nav-links a {
+          position: relative;
           color: var(--text);
           text-decoration: none;
           font-size: 0.875rem;
@@ -292,10 +293,26 @@ export default function Header() {
           padding: 0.5rem 0.875rem;
           border-radius: 999px;
           white-space: nowrap;
-          transition: background-color 0.15s ease;
+          transition: background-color var(--duration-fast) var(--ease-out);
         }
         .rk-nav-links a:hover {
           background: var(--bg-secondary);
+        }
+        .rk-nav-links a::after {
+          content: '';
+          position: absolute;
+          left: 0.875rem;
+          right: 0.875rem;
+          bottom: 0.3rem;
+          height: 2px;
+          border-radius: 999px;
+          background: var(--accent-red);
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform var(--duration-base) var(--ease-out);
+        }
+        .rk-nav-links a:hover::after {
+          transform: scaleX(1);
         }
         .rk-nav-sale {
           color: var(--accent-red) !important;
@@ -383,7 +400,7 @@ export default function Header() {
         .rk-mobile-menu {
           overflow: hidden;
           max-height: 0;
-          transition: max-height 0.3s ease;
+          transition: max-height var(--duration-slow) var(--ease-out);
         }
         .rk-mobile-menu-open {
           max-height: 600px;
