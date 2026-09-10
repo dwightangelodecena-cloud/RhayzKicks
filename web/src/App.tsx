@@ -14,15 +14,13 @@ import AccountPage from './pages/AccountPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
 import AuthPage from './pages/AuthPage'
 import AppPromoPage from './pages/AppPromoPage'
-import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
-import StaffSignup from './pages/admin/StaffSignup'
 import './theme/theme.css'
 
 function RequireStaff({ children }: { children: ReactElement }) {
   const { isStaff, checkingSession } = useAdmin()
   if (checkingSession) return null
-  return isStaff ? children : <Navigate to="/admin" replace />
+  return isStaff ? children : <Navigate to="/signin" replace />
 }
 
 function App() {
@@ -45,8 +43,7 @@ function App() {
                 <Route path="/signin" element={<AuthPage />} />
                 <Route path="/join" element={<AuthPage />} />
                 <Route path="/app" element={<AppPromoPage />} />
-                <Route path="/admin" element={<AdminLogin />} />
-                <Route path="/staff/signup" element={<StaffSignup />} />
+                <Route path="/admin" element={<Navigate to="/signin" replace />} />
                 <Route
                   path="/admin/dashboard"
                   element={

@@ -18,8 +18,6 @@ interface StaffRow {
 
 const roles: StaffRole[] = ['staff', 'admin']
 
-type SignupMode = 'password' | 'existing'
-
 const emptyForm = { email: '', password: '', full_name: '', phone: '', role: 'staff' as StaffRole, employee_id: '' }
 
 export default function AdminStaff() {
@@ -30,7 +28,6 @@ export default function AdminStaff() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const [adding, setAdding] = useState(false)
-  const [signupMode, setSignupMode] = useState<SignupMode>('password')
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
@@ -55,53 +52,40 @@ export default function AdminStaff() {
     load()
   }, [])
 
-  const addStaffExisting = async () => {
-    const { error: rpcError } = await supabase.rpc('create_staff_account', {
-      p_email: form.email.trim(),
-      p_full_name: form.full_name.trim(),
-      p_phone: form.phone.trim(),
-      p_role: form.role,
-      p_employee_id: form.employee_id.trim(),
-    })
-    if (rpcError) throw new Error(rpcError.message)
-  }
-
-  const addStaffWithPassword = async () => {
-    if (!passwordMeetsRequirements(form.password)) {
-      throw new Error('Password does not meet the requirements below.')
-    }
-    const { data, error: invokeError } = await supabase.functions.invoke('create-staff-account', {
-      body: {
-        email: form.email.trim(),
-        password: form.password,
-        full_name: form.full_name.trim(),
-        phone: form.phone.trim(),
-        role: form.role,
-        employee_id: form.employee_id.trim(),
-      },
-    })
-    if (invokeError) {
-      // FunctionsHttpError's .message is a generic "non-2xx status" string — the
-      // actual reason (e.g. "Password must be at least 8 characters") is in the
-      // response body the function returned.
-      const context = (invokeError as { context?: Response }).context
-      const bodyMessage = context ? await context.clone().json().then((b) => b?.error).catch(() => null) : null
-      throw new Error(bodyMessage ?? invokeError.message)
-    }
-    if (data?.error) throw new Error(data.error)
-  }
-
   const addStaff = async () => {
     if (!form.email.trim() || !form.full_name.trim()) return
+    if (!passwordMeetsRequirements(form.password)) {
+      setError('Password does not meet the requirements below.')
+      return
+    }
     setSaving(true)
     setError(null)
     setNotice(null)
     try {
-      if (signupMode === 'password') {
-        await addStaffWithPassword()
-      } else {
-        await addStaffExisting()
+      const { data, error: invokeError } = await supabase.functions.invoke('create-staff-account', {
+        body: {
+          email: form.email.trim(),
+          password: form.password,
+          full_name: form.full_name.trim(),
+          phone: form.phone.trim(),
+          role: form.role,
+          employee_id: form.employee_id.trim(),
+        },
+      })
+      if (invokeError) {
+        // FunctionsHttpError's .message is a generic "non-2xx status" string — the
+        // actual reason (e.g. "Password must be at least 8 characters") is in the
+        // response body the function returned. Not every invoke error carries a
+        // real Response here (e.g. a network-level FunctionsFetchError doesn't),
+        // so guard for a `.json` method rather than assuming — and skip `.clone()`
+        // since the body is only read once.
+        const context = (invokeError as { context?: Response }).context
+        const bodyMessage =
+          context && typeof context.json === 'function' ? await context.json().then((b) => b?.error).catch(() => null) : null
+        throw new Error(bodyMessage ?? invokeError.message)
       }
+      if (data?.error) throw new Error(data.error)
+
       setNotice(`${form.full_name} added to the staff roster.`)
       setForm(emptyForm)
       setAdding(false)
@@ -135,28 +119,6 @@ export default function AdminStaff() {
     <div>
       <style>{adminCardStyles}</style>
       <style>{`
-        .rk-staff-mode-toggle {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.875rem;
-          grid-column: 1 / -1;
-        }
-        .rk-staff-mode-btn {
-          flex: 1;
-          border: 1px solid var(--border);
-          background: var(--bg);
-          color: var(--text-muted);
-          padding: 0.625rem 0.75rem;
-          border-radius: 0.625rem;
-          font-size: 0.75rem;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        .rk-staff-mode-btn-active {
-          background: var(--text);
-          color: var(--bg);
-          border-color: var(--text);
-        }
         .rk-staff-pw-reqs {
           grid-column: 1 / -1;
           display: flex;
@@ -195,7 +157,7 @@ export default function AdminStaff() {
         <div className="rk-admin-card-head">
           <div>
             <h2 className="rk-admin-card-title"><IconUsers /> Staff Roster</h2>
-            <p className="rk-admin-card-desc">Set a password directly, or link someone who already signed up at <code>/staff/signup</code>.</p>
+            <p className="rk-admin-card-desc">Create a login and add them to the roster in one step.</p>
           </div>
           <button className="rk-admin-primary-btn" onClick={() => setAdding((a) => !a)}>+ Add Staff</button>
         </div>
@@ -203,35 +165,14 @@ export default function AdminStaff() {
         {adding && (
           <div className="rk-admin-form-panel">
             <div className="rk-admin-form-grid">
-              <div className="rk-staff-mode-toggle">
-                <button
-                  type="button"
-                  className={`rk-staff-mode-btn ${signupMode === 'password' ? 'rk-staff-mode-btn-active' : ''}`}
-                  onClick={() => setSignupMode('password')}
-                >
-                  Set a password now
-                </button>
-                <button
-                  type="button"
-                  className={`rk-staff-mode-btn ${signupMode === 'existing' ? 'rk-staff-mode-btn-active' : ''}`}
-                  onClick={() => setSignupMode('existing')}
-                >
-                  Already signed up
-                </button>
-              </div>
-
               <label className="rk-field">
                 <span className="rk-field-label">Email</span>
                 <input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
               </label>
-
-              {signupMode === 'password' && (
-                <label className="rk-field">
-                  <span className="rk-field-label">Password</span>
-                  <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} autoComplete="new-password" />
-                </label>
-              )}
-
+              <label className="rk-field">
+                <span className="rk-field-label">Password</span>
+                <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} autoComplete="new-password" />
+              </label>
               <label className="rk-field">
                 <span className="rk-field-label">Full name</span>
                 <input value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} />
@@ -251,18 +192,16 @@ export default function AdminStaff() {
                 <input value={form.employee_id} onChange={(e) => setForm((f) => ({ ...f, employee_id: e.target.value }))} />
               </label>
 
-              {signupMode === 'password' && (
-                <div className="rk-staff-pw-reqs">
-                  {passwordRequirements.map((req) => {
-                    const met = req.test(form.password)
-                    return (
-                      <span key={req.label} className={`rk-staff-pw-req ${met ? 'rk-staff-pw-req-met' : ''}`}>
-                        {met ? '✓' : '·'} {req.label}
-                      </span>
-                    )
-                  })}
-                </div>
-              )}
+              <div className="rk-staff-pw-reqs">
+                {passwordRequirements.map((req) => {
+                  const met = req.test(form.password)
+                  return (
+                    <span key={req.label} className={`rk-staff-pw-req ${met ? 'rk-staff-pw-req-met' : ''}`}>
+                      {met ? '✓' : '·'} {req.label}
+                    </span>
+                  )
+                })}
+              </div>
 
               <div className="rk-admin-form-actions">
                 <button className="rk-admin-add-btn" onClick={addStaff} disabled={saving}>{saving ? 'Adding…' : 'Add to Roster'}</button>

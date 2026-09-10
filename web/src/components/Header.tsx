@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import Logo from './Logo'
 import { formatPeso } from '../data/catalog'
 import { getActiveProducts, getAnnouncements, getNavCategories, type Announcement, type NavCategory, type Product } from '../lib/storeData'
@@ -30,14 +30,6 @@ function SearchIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.35-4.35" />
-    </svg>
-  )
-}
-
-function ShieldIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3z" />
     </svg>
   )
 }
@@ -101,7 +93,6 @@ export default function Header() {
   const [navCategories, setNavCategories] = useState<NavCategory[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const searchWrapRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
   const { cartCount, openCart, openWishlist } = useShop()
   const { isAuthenticated, user } = useAuth()
 
@@ -432,22 +423,6 @@ export default function Header() {
         .rk-mobile-links a svg {
           color: var(--chip-border);
         }
-        .rk-mobile-admin {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          justify-content: center;
-          width: 100%;
-          margin-top: 1rem;
-          padding: 0.75rem;
-          background: none;
-          border: 1px solid var(--border);
-          border-radius: 999px;
-          color: var(--text-muted);
-          font-size: 0.75rem;
-          font-weight: 700;
-          cursor: pointer;
-        }
         /* Breakpoints match the source design: sm=640, md=768, lg=1024 */
         @media (max-width: 639px) {
           .rk-brand-text {
@@ -559,9 +534,6 @@ export default function Header() {
               <BagIcon />
               {cartCount > 0 && <span className="rk-bag-count">{cartCount}</span>}
             </button>
-            <button className="rk-icon-btn" aria-label="Admin" onClick={() => navigate('/admin')}>
-              <ShieldIcon />
-            </button>
           </div>
         </div>
 
@@ -585,15 +557,6 @@ export default function Header() {
                 </Link>
               ))}
             </nav>
-            <button
-              className="rk-mobile-admin"
-              onClick={() => {
-                setMenuOpen(false)
-                navigate('/admin')
-              }}
-            >
-              <ShieldIcon /> Admin CMS
-            </button>
           </div>
         </div>
       </header>

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo'
 import { supabase } from '../supabase'
-import { isCallerAdmin } from '../context/AdminContext'
+import { isCallerStaff } from '../context/AdminContext'
 import { passwordRequirements, passwordMeetsRequirements } from '../lib/passwordRules'
 
 const perks = ['Free Shipping', 'Early Access', 'Member Discounts', 'Exclusive Drops']
@@ -209,9 +209,9 @@ export default function AuthPage() {
       setError('Incorrect email or password.')
       return
     }
-    const admin = await isCallerAdmin()
+    const staff = await isCallerStaff()
     setSubmitting(false)
-    navigate(admin ? '/admin/dashboard' : returnTo, { replace: true })
+    navigate(staff ? '/admin/dashboard' : returnTo, { replace: true })
   }
 
   const continueWithGoogle = async () => {

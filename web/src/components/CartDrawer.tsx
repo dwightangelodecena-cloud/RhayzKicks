@@ -62,8 +62,13 @@ export default function CartDrawer() {
       headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
     })
     if (error) {
+      // Not every invoke error carries a real Response here (e.g. a
+      // network-level FunctionsFetchError doesn't), so guard for a `.json`
+      // method rather than assuming — and skip `.clone()` since the body is
+      // only read once.
       const context = (error as { context?: Response }).context
-      const bodyMessage = context ? await context.clone().json().then((b) => b?.error).catch(() => null) : null
+      const bodyMessage =
+        context && typeof context.json === 'function' ? await context.json().then((b) => b?.error).catch(() => null) : null
       setCheckoutError(bodyMessage ?? error.message)
       setCheckingOut(false)
       return

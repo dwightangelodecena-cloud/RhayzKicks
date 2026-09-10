@@ -8,11 +8,7 @@ interface AdminContextValue {
   isStaff: boolean
   role: StaffRole | null
   checkingSession: boolean
-  rejectedReason: string | null
-  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; role?: StaffRole }>
-  loginWithGoogle: () => Promise<{ ok: boolean; error?: string }>
   logout: () => void
-  clearRejection: () => void
 }
 
 const AdminContext = createContext<AdminContextValue | null>(null)
@@ -20,8 +16,20 @@ const AdminContext = createContext<AdminContextValue | null>(null)
 // Any active staff row (role 'staff' or 'admin') counts as staff — used to
 // gate the whole /admin/dashboard shell. isAdmin (below) narrows further for
 // admin-only tabs/actions.
+//
+// Must filter to the caller's own row explicitly — the staff_select RLS
+// policy (`using (is_active_staff())`) is a table-wide gate ("can this user
+// see staff rows at all"), not a per-row filter, since the roster page needs
+// every active staff member to see everyone else's row too. Without the
+// .eq('id', ...) filter, this query returns every staff row once there's
+// more than one, and .maybeSingle() throws on "multiple rows returned" —
+// which silently worked while there was only one staff member and broke the
+// moment a second one was added.
 async function getCallerStaffInfo(): Promise<{ role: StaffRole } | null> {
-  const { data, error } = await supabase.from('staff').select('role, is_active').maybeSingle()
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData.user?.id
+  if (!userId) return null
+  const { data, error } = await supabase.from('staff').select('role, is_active').eq('id', userId).maybeSingle()
   if (error || !data || data.is_active !== true) return null
   return { role: data.role as StaffRole }
 }
@@ -31,37 +39,33 @@ export async function isCallerAdmin() {
   return info?.role === 'admin'
 }
 
+// Any active staff row (admin or staff role) — used to route a sign-in on
+// the regular customer form straight to the admin dashboard, the same way
+// isCallerAdmin() does for the admin-only case.
+export async function isCallerStaff() {
+  const info = await getCallerStaffInfo()
+  return info !== null
+}
+
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<StaffRole | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
-  const [rejectedReason, setRejectedReason] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
+    // Admin/staff sign in through the same form and session as everyone
+    // else (AuthPage.tsx) — this just reflects whatever staff role (if any)
+    // the current session's user has. A signed-in customer with no staff row
+    // simply gets role: null here; RequireStaff (App.tsx) is what keeps them
+    // out of /admin/dashboard, not this listener.
     const syncFromSession = async (session: import('@supabase/supabase-js').Session | null) => {
       if (!session) {
         if (!cancelled) setRole(null)
         return
       }
       const info = await getCallerStaffInfo()
-      if (cancelled) return
-      if (info) {
-        setRole(info.role)
-        return
-      }
-      setRole(null)
-      // Not staff isn't an error for 99% of sessions — this fires for every
-      // regular shopper too, since AdminProvider wraps the whole app, not
-      // just /admin routes. Only reject + sign out when we're actually on an
-      // admin route (the OAuth "Continue with Google" login redirects back
-      // to /admin, landing here instead of the login() function below) —
-      // otherwise this was silently signing every customer back out the
-      // moment their session loaded or refreshed.
-      if (window.location.pathname.startsWith('/admin')) {
-        setRejectedReason('This account is not an active staff member.')
-        await supabase.auth.signOut()
-      }
+      if (!cancelled) setRole(info?.role ?? null)
     }
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -79,35 +83,10 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = async (email: string, password: string) => {
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) return { ok: false, error: 'Incorrect email or password.' }
-
-    const info = await getCallerStaffInfo()
-    if (!info) {
-      await supabase.auth.signOut()
-      return { ok: false, error: 'This account is not an active staff member.' }
-    }
-
-    setRole(info.role)
-    return { ok: true, role: info.role }
-  }
-
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + '/admin' },
-    })
-    if (error) return { ok: false, error: error.message }
-    return { ok: true }
-  }
-
   const logout = () => {
     supabase.auth.signOut()
     setRole(null)
   }
-
-  const clearRejection = () => setRejectedReason(null)
 
   return (
     <AdminContext.Provider
@@ -116,11 +95,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         isStaff: role !== null,
         role,
         checkingSession,
-        rejectedReason,
-        login,
-        loginWithGoogle,
         logout,
-        clearRejection,
       }}
     >
       {children}

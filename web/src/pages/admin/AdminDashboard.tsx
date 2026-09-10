@@ -349,7 +349,7 @@ export default function AdminDashboard() {
             className="rk-admin-sidebar-action rk-admin-sidebar-action-danger"
             onClick={() => {
               logout()
-              navigate('/admin')
+              navigate('/signin')
             }}
           >
             <IconLogout /> Log Out
