@@ -3,7 +3,6 @@ import { supabase } from '../../supabase'
 import { adminCardStyles } from './adminCardStyles'
 import { Money } from './Money'
 import { IconReceipt, IconUsers, IconWallet } from './adminIcons'
-import AdminOnlineOrders from './AdminOnlineOrders'
 import type { PaymentMethod } from '../../types/database.types'
 
 function SearchIcon() {
@@ -678,8 +677,6 @@ export default function AdminSalesPOS() {
           </div>
         )}
       </div>
-
-      <AdminOnlineOrders />
     </div>
   )
 }

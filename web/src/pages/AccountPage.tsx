@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import PageHero from '../components/PageHero'
+import DeliveryStepper from '../components/DeliveryStepper'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
+import type { DeliveryStage } from '../data/deliveryStages'
 
 function formatPeso(amount: number) {
   return `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -15,6 +17,10 @@ interface OrderRow {
   total: number
   status: string
   source: 'In-Store' | 'Online'
+  deliveryStage: DeliveryStage | null
+  packedAt: string | null
+  pickedUpAt: string | null
+  receivedAt: string | null
 }
 
 const statusLabel: Record<string, string> = {
@@ -27,11 +33,29 @@ const statusLabel: Record<string, string> = {
   fulfilled: 'Fulfilled',
 }
 
+const orderGroups: { key: string; label: string; match: (o: OrderRow) => boolean }[] = [
+  { key: 'pending', label: 'Pending Payment', match: (o) => o.status === 'pending' },
+  { key: 'paid', label: 'Paid', match: (o) => o.status === 'paid' },
+  { key: 'completed', label: 'Completed', match: (o) => o.status === 'fulfilled' || o.status === 'completed' },
+  { key: 'cancelled', label: 'Cancelled', match: (o) => o.status === 'cancelled' || o.status === 'refunded' || o.status === 'voided' },
+]
+
+type AccountTab = 'profile' | 'orders' | 'rewards' | 'security'
+
+const accountTabs: { key: AccountTab; label: string }[] = [
+  { key: 'profile', label: 'Profile' },
+  { key: 'orders', label: 'My Orders' },
+  { key: 'rewards', label: 'Rewards' },
+  { key: 'security', label: 'Security' },
+]
+
 export default function AccountPage() {
   const { checkingSession, isAuthenticated, user, customer, refreshCustomer } = useAuth()
 
+  const [activeTab, setActiveTab] = useState<AccountTab>('profile')
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [ordersLoading, setOrdersLoading] = useState(true)
+  const [expandedOrderKey, setExpandedOrderKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!customer) return
@@ -39,12 +63,23 @@ export default function AccountPage() {
     ;(async () => {
       const [salesRes, onlineRes] = await Promise.all([
         supabase.from('sales').select('id, order_number, sale_date, total, status').eq('customer_id', customer.id).order('sale_date', { ascending: false }).limit(20),
-        supabase.from('online_orders').select('id, order_number, created_at, total, status').eq('customer_id', customer.id).order('created_at', { ascending: false }).limit(20),
+        supabase
+          .from('online_orders')
+          .select('id, order_number, created_at, total, status, delivery_stage, packed_at, picked_up_at, received_at')
+          .eq('customer_id', customer.id)
+          .order('created_at', { ascending: false })
+          .limit(20),
       ])
       if (cancelled) return
       const combined: OrderRow[] = [
-        ...(salesRes.data ?? []).map((s) => ({ id: s.id, orderNumber: s.order_number, date: s.sale_date, total: Number(s.total), status: s.status, source: 'In-Store' as const })),
-        ...(onlineRes.data ?? []).map((o) => ({ id: o.id, orderNumber: o.order_number, date: o.created_at, total: Number(o.total), status: o.status, source: 'Online' as const })),
+        ...(salesRes.data ?? []).map((s) => ({
+          id: s.id, orderNumber: s.order_number, date: s.sale_date, total: Number(s.total), status: s.status, source: 'In-Store' as const,
+          deliveryStage: null, packedAt: null, pickedUpAt: null, receivedAt: null,
+        })),
+        ...(onlineRes.data ?? []).map((o) => ({
+          id: o.id, orderNumber: o.order_number, date: o.created_at, total: Number(o.total), status: o.status, source: 'Online' as const,
+          deliveryStage: o.delivery_stage as DeliveryStage, packedAt: o.packed_at, pickedUpAt: o.picked_up_at, receivedAt: o.received_at,
+        })),
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       setOrders(combined)
       setOrdersLoading(false)
@@ -131,15 +166,57 @@ export default function AccountPage() {
     <div>
       <style>{`
         .rk-account-body {
-          max-width: 40rem;
+          max-width: 64rem;
           margin: 0 auto;
           padding: 2rem 1.25rem 4rem;
+        }
+        .rk-account-tabs {
+          display: flex;
+          gap: 0.5rem;
+          overflow-x: auto;
+          margin-bottom: 1.75rem;
+          padding-bottom: 0.25rem;
+        }
+        .rk-account-tab {
+          flex-shrink: 0;
+          border: 1px solid var(--chip-border);
+          background: var(--bg);
+          color: var(--text-muted);
+          padding: 0.625rem 1.25rem;
+          border-radius: 999px;
+          font-size: 0.8125rem;
+          font-weight: 700;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+        }
+        .rk-account-tab:hover {
+          border-color: var(--text-faint);
+          color: var(--text);
+        }
+        .rk-account-tab-active {
+          background: var(--text);
+          border-color: var(--text);
+          color: var(--bg);
+        }
+        .rk-account-cards-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+          animation: rk-fade-in var(--duration-base) var(--ease-out) both;
         }
         .rk-account-card {
           border: 1px solid var(--border);
           border-radius: var(--radius-card);
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
+          padding: 1.75rem;
+        }
+        .rk-account-card-full {
+          grid-column: 1 / -1;
+        }
+        @media (min-width: 768px) {
+          .rk-account-cards-grid {
+            grid-template-columns: 1fr 1fr;
+          }
         }
         .rk-account-card-title {
           font-family: 'Barlow Condensed', sans-serif;
@@ -226,19 +303,55 @@ export default function AccountPage() {
           font-size: 0.75rem;
           color: var(--text-muted);
         }
+        .rk-account-order-groups {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+        .rk-account-order-group-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.6875rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--text-faint);
+          margin: 0 0 0.625rem;
+        }
+        .rk-account-order-group-count {
+          background: var(--bg-secondary);
+          color: var(--text-muted);
+          border-radius: 999px;
+          padding: 0.0625rem 0.5rem;
+          font-size: 0.625rem;
+        }
         .rk-account-orders {
           display: flex;
           flex-direction: column;
           gap: 0.625rem;
+        }
+        .rk-account-order-card {
+          background: var(--bg-secondary);
+          border-radius: 0.75rem;
+          overflow: hidden;
         }
         .rk-account-order-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 0.75rem;
-          background: var(--bg-secondary);
-          border-radius: 0.75rem;
           padding: 0.75rem 1rem;
+        }
+        .rk-account-order-row-trackable {
+          cursor: pointer;
+        }
+        .rk-account-order-chevron {
+          font-size: 0.625rem;
+          color: var(--text-faint);
+        }
+        .rk-account-order-tracking {
+          padding: 0.25rem 1rem 1.125rem;
         }
         .rk-account-order-number {
           font-weight: 800;
@@ -289,6 +402,7 @@ export default function AccountPage() {
           color: var(--accent-red);
         }
         .rk-account-signout {
+          margin-top: 1.5rem;
           background: none;
           border: 1px solid var(--border);
           border-radius: 999px;
@@ -308,6 +422,22 @@ export default function AccountPage() {
       <PageHero title="My Account" subtitle="Manage your profile, address, and security settings." />
 
       <div className="rk-account-body">
+      <div className="rk-account-tabs">
+        {accountTabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`rk-account-tab ${activeTab === t.key ? 'rk-account-tab-active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rk-account-cards-grid" key={activeTab}>
+      {activeTab === 'profile' && (
+      <>
         <div className="rk-account-card">
           <h2 className="rk-account-card-title">Profile</h2>
           <p className="rk-account-card-desc">Your name and contact number.</p>
@@ -361,8 +491,11 @@ export default function AccountPage() {
             {addressMessage && <span className="rk-account-message">{addressMessage}</span>}
           </div>
         </div>
+      </>
+      )}
 
-        <div className="rk-account-card">
+      {activeTab === 'orders' && (
+        <div className="rk-account-card rk-account-card-full">
           <h2 className="rk-account-card-title">My Orders</h2>
           <p className="rk-account-card-desc">Purchases made online or in-store.</p>
           {ordersLoading ? (
@@ -370,24 +503,59 @@ export default function AccountPage() {
           ) : orders.length === 0 ? (
             <p className="rk-account-message">No orders yet.</p>
           ) : (
-            <div className="rk-account-orders">
-              {orders.map((o) => (
-                <div key={`${o.source}-${o.id}`} className="rk-account-order-row">
-                  <div>
-                    <div className="rk-account-order-number">{o.orderNumber}</div>
-                    <div className="rk-account-order-meta">{o.source} · {new Date(o.date).toLocaleDateString()}</div>
+            <div className="rk-account-order-groups">
+              {orderGroups.map((group) => {
+                const groupOrders = orders.filter(group.match)
+                if (groupOrders.length === 0) return null
+                return (
+                  <div key={group.key}>
+                    <div className="rk-account-order-group-label">
+                      {group.label} <span className="rk-account-order-group-count">{groupOrders.length}</span>
+                    </div>
+                    <div className="rk-account-orders">
+                      {groupOrders.map((o) => {
+                        const key = `${o.source}-${o.id}`
+                        const trackable = o.source === 'Online' && o.deliveryStage && (o.status === 'paid' || o.status === 'fulfilled')
+                        const isExpanded = expandedOrderKey === key
+                        return (
+                          <div key={key} className="rk-account-order-card">
+                            <div
+                              className={`rk-account-order-row ${trackable ? 'rk-account-order-row-trackable' : ''}`}
+                              onClick={trackable ? () => setExpandedOrderKey(isExpanded ? null : key) : undefined}
+                            >
+                              <div>
+                                <div className="rk-account-order-number">{o.orderNumber}</div>
+                                <div className="rk-account-order-meta">{o.source} · {new Date(o.date).toLocaleDateString()}</div>
+                              </div>
+                              <div className="rk-account-order-right">
+                                <span className="rk-account-order-total">{formatPeso(o.total)}</span>
+                                <span className={`rk-account-order-badge rk-account-order-badge-${o.status}`}>{statusLabel[o.status] ?? o.status}</span>
+                                {trackable && <span className="rk-account-order-chevron">{isExpanded ? '▲' : '▼'}</span>}
+                              </div>
+                            </div>
+                            {trackable && isExpanded && o.deliveryStage && (
+                              <div className="rk-account-order-tracking">
+                                <DeliveryStepper
+                                  stage={o.deliveryStage}
+                                  variant="customer"
+                                  timestamps={{ packed: o.packedAt, picked_up: o.pickedUpAt, received: o.receivedAt }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="rk-account-order-right">
-                    <span className="rk-account-order-total">{formatPeso(o.total)}</span>
-                    <span className={`rk-account-order-badge rk-account-order-badge-${o.status}`}>{statusLabel[o.status] ?? o.status}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
+      )}
 
-        <div className="rk-account-card">
+      {activeTab === 'rewards' && (
+        <div className="rk-account-card rk-account-card-full">
           <h2 className="rk-account-card-title">Rewards</h2>
           <p className="rk-account-card-desc">Earned from purchases made in-store or online.</p>
           <div className="rk-account-loyalty">
@@ -401,8 +569,10 @@ export default function AccountPage() {
             </div>
           </div>
         </div>
+      )}
 
-        <div className="rk-account-card">
+      {activeTab === 'security' && (
+        <div className="rk-account-card rk-account-card-full">
           <h2 className="rk-account-card-title">Privacy &amp; Security</h2>
           <p className="rk-account-card-desc">Change the password used to sign in.</p>
           <div className="rk-account-grid">
@@ -423,6 +593,8 @@ export default function AccountPage() {
             {passwordError && <span className="rk-account-message rk-account-message-error">{passwordError}</span>}
           </div>
         </div>
+      )}
+      </div>
 
         <button className="rk-account-signout" onClick={() => supabase.auth.signOut()}>Sign Out</button>
       </div>

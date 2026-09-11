@@ -8,6 +8,7 @@ import '../state/auth_controller.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/page_hero.dart';
+import 'orders_screen.dart';
 
 // Mirrors web's AccountPage.tsx: profile info, address, rewards, theme
 // (mobile-only — web's theme toggle stays where it already is), and
@@ -38,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _passwordError;
 
   String? _loadedCustomerId;
+  String _activeTab = 'profile';
 
   @override
   void dispose() {
@@ -154,63 +156,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _Card(
-                            title: 'Profile',
-                            description: 'Your name and contact number.',
-                            saving: _savingProfile,
-                            message: _profileMessage,
-                            saveLabel: 'Save Profile',
-                            onSave: () => _saveProfile(customer),
-                            children: [
-                              _LabeledField(label: 'Full name', controller: _fullNameController),
-                              _LabeledField(label: 'Email', initialValue: customer.email, enabled: false),
-                              _LabeledField(label: 'Phone', controller: _phoneController, keyboardType: TextInputType.phone),
-                            ],
+                          _NavCard(
+                            title: 'My Orders',
+                            description: 'Track packing, pickup, and delivery for your online orders.',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen())),
                           ),
-                          _Card(
-                            title: 'Shipping Address',
-                            description: 'Used to pre-fill delivery details at checkout.',
-                            saving: _savingAddress,
-                            message: _addressMessage,
-                            saveLabel: 'Save Address',
-                            onSave: () => _saveAddress(customer),
-                            children: [
-                              _LabeledField(label: 'Street', controller: _streetController),
-                              _LabeledField(label: 'City', controller: _cityController),
-                              _LabeledField(label: 'Province', controller: _provinceController),
-                              _LabeledField(label: 'ZIP Code', controller: _zipController),
-                            ],
+                          _AccountTabBar(
+                            active: _activeTab,
+                            onChanged: (tab) => setState(() => _activeTab = tab),
                           ),
-                          _Card(
-                            title: 'Rewards',
-                            description: 'Earned from purchases made in-store or online.',
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _Stat(value: '${customer.loyaltyPoints}', label: 'Loyalty Points'),
-                                  ),
-                                  Expanded(
-                                    child: _Stat(value: formatPeso(customer.totalPurchases), label: 'Total Purchases'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const _ThemeCard(),
-                          _Card(
-                            title: 'Privacy & Security',
-                            description: 'Change the password used to sign in.',
-                            saving: _savingPassword,
-                            message: _passwordMessage,
-                            errorMessage: _passwordError,
-                            saveLabel: 'Update Password',
-                            onSave: _changePassword,
-                            children: [
-                              _LabeledField(label: 'New password', controller: _passwordController, obscureText: true),
-                              _LabeledField(label: 'Confirm new password', controller: _confirmController, obscureText: true),
-                            ],
-                          ),
+                          const SizedBox(height: 16),
+                          if (_activeTab == 'profile') ...[
+                            _Card(
+                              title: 'Profile',
+                              description: 'Your name and contact number.',
+                              saving: _savingProfile,
+                              message: _profileMessage,
+                              saveLabel: 'Save Profile',
+                              onSave: () => _saveProfile(customer),
+                              children: [
+                                _LabeledField(label: 'Full name', controller: _fullNameController),
+                                _LabeledField(label: 'Email', initialValue: customer.email, enabled: false),
+                                _LabeledField(label: 'Phone', controller: _phoneController, keyboardType: TextInputType.phone),
+                              ],
+                            ),
+                            _Card(
+                              title: 'Shipping Address',
+                              description: 'Used to pre-fill delivery details at checkout.',
+                              saving: _savingAddress,
+                              message: _addressMessage,
+                              saveLabel: 'Save Address',
+                              onSave: () => _saveAddress(customer),
+                              children: [
+                                _LabeledField(label: 'Street', controller: _streetController),
+                                _LabeledField(label: 'City', controller: _cityController),
+                                _LabeledField(label: 'Province', controller: _provinceController),
+                                _LabeledField(label: 'ZIP Code', controller: _zipController),
+                              ],
+                            ),
+                          ],
+                          if (_activeTab == 'rewards')
+                            _Card(
+                              title: 'Rewards',
+                              description: 'Earned from purchases made in-store or online.',
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _Stat(value: '${customer.loyaltyPoints}', label: 'Loyalty Points'),
+                                    ),
+                                    Expanded(
+                                      child: _Stat(value: formatPeso(customer.totalPurchases), label: 'Total Purchases'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          if (_activeTab == 'security') ...[
+                            const _ThemeCard(),
+                            _Card(
+                              title: 'Privacy & Security',
+                              description: 'Change the password used to sign in.',
+                              saving: _savingPassword,
+                              message: _passwordMessage,
+                              errorMessage: _passwordError,
+                              saveLabel: 'Update Password',
+                              onSave: _changePassword,
+                              children: [
+                                _LabeledField(label: 'New password', controller: _passwordController, obscureText: true),
+                                _LabeledField(label: 'Confirm new password', controller: _confirmController, obscureText: true),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: () => Supabase.instance.client.auth.signOut(),
@@ -294,6 +311,85 @@ class _Card extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+const _accountTabs = [
+  ('profile', 'Profile'),
+  ('rewards', 'Rewards'),
+  ('security', 'Security'),
+];
+
+class _AccountTabBar extends StatelessWidget {
+  final String active;
+  final ValueChanged<String> onChanged;
+
+  const _AccountTabBar({required this.active, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.rkColors;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (key, label) in _accountTabs)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                selected: active == key,
+                onSelected: (_) => onChanged(key),
+                showCheckmark: false,
+                backgroundColor: colors.bg,
+                selectedColor: colors.text,
+                labelStyle: TextStyle(color: active == key ? colors.bg : colors.textMuted, fontWeight: FontWeight.w700),
+                side: BorderSide(color: active == key ? colors.text : colors.border),
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  const _NavCard({required this.title, required this.description, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.rkColors;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(border: Border.all(color: colors.border), borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: rkHeadingStyle(fontSize: 18, color: colors.text)),
+                  const SizedBox(height: 2),
+                  Text(description, style: TextStyle(fontSize: 12.5, color: colors.textMuted)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: colors.textMuted),
+          ],
+        ),
       ),
     );
   }

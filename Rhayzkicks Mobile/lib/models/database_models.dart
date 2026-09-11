@@ -796,3 +796,43 @@ class Voucher {
         createdAt: DateTime.parse(row['created_at']),
       );
 }
+
+// online_orders — mirrors web's OrderRow-relevant columns in
+// AccountPage.tsx/AdminOnlineOrders.tsx. delivery_stage is the manual
+// packing/pickup/delivery tracker (see supabase/018_online_order_delivery_stage.sql);
+// status stays the coarser pending/paid/cancelled/fulfilled lifecycle.
+class OnlineOrder {
+  final String id;
+  final String orderNumber;
+  final num total;
+  final String status; // pending | paid | cancelled | fulfilled
+  final String deliveryStage; // preparing | packed | picked_up | received
+  final DateTime createdAt;
+  final DateTime? packedAt;
+  final DateTime? pickedUpAt;
+  final DateTime? receivedAt;
+
+  OnlineOrder({
+    required this.id,
+    required this.orderNumber,
+    required this.total,
+    required this.status,
+    required this.deliveryStage,
+    required this.createdAt,
+    this.packedAt,
+    this.pickedUpAt,
+    this.receivedAt,
+  });
+
+  factory OnlineOrder.fromMap(Map<String, dynamic> row) => OnlineOrder(
+        id: row['id'] ?? '',
+        orderNumber: row['order_number'] ?? '',
+        total: row['total'] ?? 0,
+        status: row['status'] ?? 'pending',
+        deliveryStage: row['delivery_stage'] ?? 'preparing',
+        createdAt: DateTime.parse(row['created_at']),
+        packedAt: row['packed_at'] != null ? DateTime.parse(row['packed_at']) : null,
+        pickedUpAt: row['picked_up_at'] != null ? DateTime.parse(row['picked_up_at']) : null,
+        receivedAt: row['received_at'] != null ? DateTime.parse(row['received_at']) : null,
+      );
+}

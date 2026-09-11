@@ -182,6 +182,19 @@ Future<void> removeWishlistItem(String customerId, String itemId) async {
   }
 }
 
+// Mirrors web's AccountPage.tsx online-orders query — read directly from
+// Supabase (no Laravel API involved for orders), scoped to the signed-in
+// customer via customer_id, same RLS (online_orders_select_own) web relies on.
+Future<List<OnlineOrder>> getMyOnlineOrders(String customerId) async {
+  final rows = await _client
+      .from('online_orders')
+      .select('id, order_number, created_at, total, status, delivery_stage, packed_at, picked_up_at, received_at')
+      .eq('customer_id', customerId)
+      .order('created_at', ascending: false)
+      .limit(20);
+  return (rows as List).map((r) => OnlineOrder.fromMap(r as Map<String, dynamic>)).toList();
+}
+
 Future<List<NavCategory>> getNavCategories() async {
   final rows = await _client.from('nav_categories').select('slug, label, image_url').eq('is_visible', true).order('sort_order');
   return (rows as List).map((r) => NavCategory.fromMap(r as Map<String, dynamic>)).toList();

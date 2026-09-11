@@ -9,16 +9,18 @@ import AdminVendors from './AdminVendors'
 import AdminStaffHours from './AdminStaffHours'
 import AdminSalesPOS from './AdminSalesPOS'
 import AdminInventory from './AdminInventory'
+import AdminOnlineOrders from './AdminOnlineOrders'
 import AdminStaff from './AdminStaff'
 import AdminLoyalty from './AdminLoyalty'
 import StaffMyHours from './StaffMyHours'
-import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, IconStore, IconTruck, IconUsers, IconWallet } from './adminIcons'
+import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, IconPackageCheck, IconStore, IconTruck, IconUsers, IconWallet } from './adminIcons'
 import type { StaffRole } from '../../types/database.types'
 
 const tabs = [
   { label: 'Overview', icon: IconOverview, blurb: 'Store performance at a glance', roles: ['admin'] },
   { label: 'Sales', icon: IconWallet, blurb: 'Ring up a sale', roles: ['admin', 'staff'] },
   { label: 'Inventory', icon: IconBox, blurb: 'Stock on hand & restocks', roles: ['admin', 'staff'] },
+  { label: 'Delivery', icon: IconPackageCheck, blurb: 'Track packing, pickup & delivery for online orders', roles: ['admin', 'staff'] },
   { label: 'Content', icon: IconLayers, blurb: 'Banners, collections, categories & products — everything on the storefront', roles: ['admin'] },
   { label: 'Vendors', icon: IconTruck, blurb: 'Suppliers & purchase orders', roles: ['admin'] },
   { label: 'Staff', icon: IconUsers, blurb: 'Staff roster & roles', roles: ['admin'] },
@@ -366,6 +368,7 @@ export default function AdminDashboard() {
           {tab === 'Overview' && <AdminOverview />}
           {tab === 'Sales' && <AdminSalesPOS />}
           {tab === 'Inventory' && <AdminInventory />}
+          {tab === 'Delivery' && <AdminOnlineOrders />}
           {tab === 'Content' && <AdminCMS />}
           {tab === 'Vendors' && <AdminVendors />}
           {tab === 'Staff' && <AdminStaff />}
