@@ -1,25 +1,59 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import Logo from './Logo'
+import { useAuth } from '../context/AuthContext'
 
-const footerColumns = [
-  {
-    title: 'Resources',
-    links: ['Become a Member', 'Shoe Size Guide', 'Student Discounts', 'Site Feedback'],
-  },
-  {
-    title: 'Help',
-    links: ['Order Status', 'Delivery Info', 'Returns & Exchanges', 'Order History', 'Contact Us'],
-  },
-  {
-    title: 'Company',
-    links: ['About Rhayz Kicks', 'News & Press', 'Careers', 'Investors', 'Sustainability'],
-  },
+interface FooterLink {
+  label: string
+  to: string
+}
+
+// "Become a Member" swaps to the Rewards tab once you're already signed in.
+function buildColumns(isMember: boolean): { title: string; links: FooterLink[] }[] {
+  return [
+    {
+      title: 'Resources',
+      links: [
+        { label: 'Become a Member', to: isMember ? '/account?tab=rewards' : '/join' },
+        { label: 'Shoe Size Guide', to: '/info/size-guide' },
+        { label: 'Student Discounts', to: '/info/student-discounts' },
+        { label: 'Site Feedback', to: '/info/feedback' },
+      ],
+    },
+    {
+      title: 'Help',
+      links: [
+        { label: 'Order Status', to: '/account?tab=orders' },
+        { label: 'Delivery Info', to: '/info/delivery' },
+        { label: 'Returns & Exchanges', to: '/info/returns' },
+        { label: 'Order History', to: '/account?tab=orders' },
+        { label: 'Contact Us', to: '/help#contact' },
+      ],
+    },
+    {
+      title: 'Company',
+      links: [
+        { label: 'About Rhayz Kicks', to: '/info/about' },
+        { label: 'News & Press', to: '/info/news' },
+        { label: 'Careers', to: '/info/careers' },
+        { label: 'Investors', to: '/info/investors' },
+        { label: 'Sustainability', to: '/info/sustainability' },
+      ],
+    },
+  ]
+}
+
+const legalLinks: FooterLink[] = [
+  { label: 'Terms of Sale', to: '/info/terms-of-sale' },
+  { label: 'Terms of Use', to: '/info/terms-of-use' },
+  { label: 'Privacy Policy', to: '/info/privacy' },
+  { label: 'Cookie Settings', to: '/info/cookies' },
 ]
-
-const legalLinks = ['Terms of Sale', 'Terms of Use', 'Privacy Policy', 'Cookie Settings']
 
 export default function Footer() {
   const [openColumn, setOpenColumn] = useState<string | null>(null)
+  const { isAuthenticated } = useAuth()
+  const footerColumns = buildColumns(isAuthenticated)
 
   return (
     <footer className="rk-footer">
@@ -204,8 +238,8 @@ export default function Footer() {
               <h4 className="rk-footer-col-title">{col.title}</h4>
               <ul className="rk-footer-links">
                 {col.links.map((link) => (
-                  <li key={link}>
-                    <a href="#">{link}</a>
+                  <li key={link.label}>
+                    <Link to={link.to}>{link.label}</Link>
                   </li>
                 ))}
               </ul>
@@ -237,8 +271,8 @@ export default function Footer() {
               </button>
               <ul className={`rk-footer-accordion-links ${openColumn === col.title ? 'rk-footer-accordion-links-open' : ''}`}>
                 {col.links.map((link) => (
-                  <li key={link}>
-                    <a href="#">{link}</a>
+                  <li key={link.label}>
+                    <Link to={link.to}>{link.label}</Link>
                   </li>
                 ))}
               </ul>
@@ -256,7 +290,7 @@ export default function Footer() {
           </div>
           <div className="rk-footer-legal">
             {legalLinks.map((link) => (
-              <a key={link} href="#">{link}</a>
+              <Link key={link.label} to={link.to}>{link.label}</Link>
             ))}
           </div>
         </div>

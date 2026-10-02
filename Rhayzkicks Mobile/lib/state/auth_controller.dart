@@ -45,6 +45,60 @@ class AuthController extends ChangeNotifier {
   Customer? _customer;
   bool _isShopper = false;
   late final StreamSubscription<AuthState> _sub;
+  RealtimeChannel? _customerChannel;
+  String? _subscribedCustomerId;
+
+  // Points gained since the last time the popup consumed them — set when the
+  // live customer row shows loyalty_points going up (a paid web order or a
+  // POS sale). LoyaltyPointsPopup reads this and calls clearEarnedPoints().
+  int _pointsJustEarned = 0;
+  int get pointsJustEarned => _pointsJustEarned;
+
+  void clearEarnedPoints() {
+    if (_pointsJustEarned == 0) return;
+    _pointsJustEarned = 0;
+    notifyListeners();
+  }
+
+  // Swaps in a fresh customer row, noting any loyalty point increase for the
+  // same customer. Decreases (redeeming for a voucher) don't count.
+  void _applyCustomer(Customer? next) {
+    final prev = _customer;
+    if (prev != null && next != null && prev.id == next.id && next.loyaltyPoints > prev.loyaltyPoints) {
+      _pointsJustEarned += next.loyaltyPoints - prev.loyaltyPoints;
+    }
+    _customer = next;
+    _syncCustomerChannel();
+  }
+
+  // Mirrors web's AuthContext realtime subscription on the customers row.
+  // Needs `customers` in the supabase_realtime publication (020_*.sql).
+  void _syncCustomerChannel() {
+    final id = _customer?.id;
+    if (id == _subscribedCustomerId) return;
+    final old = _customerChannel;
+    _customerChannel = null;
+    if (old != null) Supabase.instance.client.removeChannel(old);
+    _subscribedCustomerId = id;
+    if (id == null) return;
+    _customerChannel = Supabase.instance.client
+        .channel('customer-$id')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'customers',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: id),
+          callback: (payload) {
+            try {
+              _applyCustomer(Customer.fromMap(payload.newRecord));
+              notifyListeners();
+            } catch (_) {
+              // Malformed payload — the next refreshCustomer() will catch up.
+            }
+          },
+        )
+        .subscribe();
+  }
 
   AuthController() {
     _syncFromSession(Supabase.instance.client.auth.currentSession);
@@ -56,7 +110,8 @@ class AuthController extends ChangeNotifier {
   Future<void> _syncFromSession(Session? session) async {
     if (session == null) {
       _user = null;
-      _customer = null;
+      _applyCustomer(null);
+      _pointsJustEarned = 0;
       _isShopper = false;
       notifyListeners();
       return;
@@ -65,11 +120,11 @@ class AuthController extends ChangeNotifier {
     _user = session.user;
     _isShopper = !staff;
     if (staff) {
-      _customer = null;
+      _applyCustomer(null);
       notifyListeners();
       return;
     }
-    _customer = await _ensureCustomerRow(session.user);
+    _applyCustomer(await _ensureCustomerRow(session.user));
     notifyListeners();
   }
 
@@ -79,7 +134,7 @@ class AuthController extends ChangeNotifier {
     try {
       final row = await Supabase.instance.client.from('customers').select().eq('auth_user_id', user.id).maybeSingle();
       if (row != null) {
-        _customer = Customer.fromMap(row);
+        _applyCustomer(Customer.fromMap(row));
         notifyListeners();
       }
     } catch (_) {
@@ -94,6 +149,8 @@ class AuthController extends ChangeNotifier {
   @override
   void dispose() {
     _sub.cancel();
+    final channel = _customerChannel;
+    if (channel != null) Supabase.instance.client.removeChannel(channel);
     super.dispose();
   }
 }

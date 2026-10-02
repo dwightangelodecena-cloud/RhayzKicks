@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabase'
 import { adminCardStyles } from './adminCardStyles'
 import { Money } from './Money'
@@ -6,25 +6,37 @@ import { IconBox, IconReset, IconUndo } from './adminIcons'
 import ImageUploadButton from './ImageUploadButton'
 import { useEditSession } from '../../context/EditSessionContext'
 import type { Gender } from '../../types/database.types'
+import { EmptyState, Modal, Notice, Pill, SearchInput, SectionHead, Segmented, Toolbar } from './adminUi'
 
 function EditIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
 }
 function TrashIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
 }
 function ChevronIcon({ open }: { open: boolean }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 0.15s ease' }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 0.15s ease' }}>
       <polyline points="9 18 15 12 9 6" />
     </svg>
   )
 }
 function UpIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
 }
 function DownIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+}
+
+// Up/down arrows with a tooltip + screen-reader label (styled by the
+// .rk-cms-reorder rules in AdminCMS).
+function MoveButtons({ what, onUp, onDown, upDisabled, downDisabled }: { what: string; onUp: () => void; onDown: () => void; upDisabled: boolean; downDisabled: boolean }) {
+  return (
+    <div className="rk-cms-reorder">
+      <button type="button" onClick={onUp} disabled={upDisabled} aria-label={`Move ${what} up`} title={`Move ${what} up (shows earlier)`}><UpIcon /></button>
+      <button type="button" onClick={onDown} disabled={downDisabled} aria-label={`Move ${what} down`} title={`Move ${what} down (shows later)`}><DownIcon /></button>
+    </div>
+  )
 }
 
 interface ItemRow {
@@ -35,6 +47,9 @@ interface ItemRow {
   gender: Gender
   description: string
   base_price: number
+  cost_price: number // from item_costs (staff-only), merged in by load()
+  points_value: number
+  earns_loyalty: boolean
   image_urls: string[]
   sort_order: number
   is_active: boolean
@@ -72,8 +87,9 @@ interface ColorwayRow {
 }
 
 const genders: Gender[] = ['unisex', 'men', 'women', 'kids']
+const genderLabels: Record<Gender, string> = { unisex: 'Everyone (unisex)', men: 'Men', women: 'Women', kids: 'Kids' }
 
-const emptyForm = { name: '', brand: 'Rhayz Kicks', category: '', gender: 'unisex' as Gender, base_price: '', description: '' }
+const emptyForm = { name: '', brand: 'Rhayz Kicks', category: '', gender: 'unisex' as Gender, base_price: '', cost_price: '', points_value: '', earns_loyalty: true, description: '' }
 const emptyVariantForm = { size: '', color: '', sku: '', quantity_on_hand: '10' }
 
 function randomSku() {
@@ -142,13 +158,20 @@ export default function AdminProducts() {
   const load = async () => {
     setLoading(true)
     setError(null)
-    const { data, error: loadError } = await supabase.from('items').select('*').order('sort_order', { ascending: true })
+    // Cost prices live in item_costs (023_item_costs_staff_only.sql) so the
+    // public items table never exposes them; merge them in for editing.
+    const [itemsRes, costsRes] = await Promise.all([
+      supabase.from('items').select('*').is('archived_at', null).order('sort_order', { ascending: true }),
+      supabase.from('item_costs').select('item_id, cost_price'),
+    ])
+    const loadError = itemsRes.error ?? costsRes.error
     if (loadError) {
       setError(loadError.message)
       setLoading(false)
       return
     }
-    setItems((data ?? []) as ItemRow[])
+    const costs = new Map((costsRes.data ?? []).map((c) => [c.item_id as string, Number(c.cost_price)]))
+    setItems(((itemsRes.data ?? []) as ItemRow[]).map((i) => ({ ...i, cost_price: costs.get(i.id) ?? 0 })))
     setLoading(false)
   }
 
@@ -167,16 +190,22 @@ export default function AdminProducts() {
   const addItem = async () => {
     if (!form.name.trim() || !form.category.trim()) return
     const nextOrder = (items.at(-1)?.sort_order ?? 0) + 1
-    const { error: insertError } = await supabase.from('items').insert({
+    const { data: created, error: insertError } = await supabase.from('items').insert({
       name: form.name.trim(),
       brand: form.brand.trim(),
       category: form.category.trim().toLowerCase(),
       gender: form.gender,
       description: form.description.trim(),
       base_price: Number(form.base_price) || 0,
+      points_value: Math.max(0, Math.floor(Number(form.points_value) || 0)),
+      earns_loyalty: form.earns_loyalty,
       sort_order: nextOrder,
-    })
+    }).select('id').single()
     if (insertError) return setError(insertError.message)
+    const { error: costError } = await supabase
+      .from('item_costs')
+      .upsert({ item_id: created.id, cost_price: Math.max(0, Number(form.cost_price) || 0) })
+    if (costError) return setError(costError.message)
     setForm(emptyForm)
     setAdding(false)
     load()
@@ -229,10 +258,16 @@ export default function AdminProducts() {
         gender: draft.gender,
         description: draft.description,
         base_price: draft.base_price,
+        points_value: Math.max(0, Math.floor(Number(draft.points_value) || 0)),
+        earns_loyalty: draft.earns_loyalty,
         image_urls: draft.image_urls,
       })
       .eq('id', draft.id)
     if (updateError) return setError(updateError.message)
+    const { error: costError } = await supabase
+      .from('item_costs')
+      .upsert({ item_id: draft.id, cost_price: Math.max(0, Number(draft.cost_price) || 0) })
+    if (costError) return setError(costError.message)
     cancelEdit()
     load()
   }
@@ -282,7 +317,9 @@ export default function AdminProducts() {
     load()
   }
 
-  const removeItem = async (id: string) => {
+  // Deletes (or archives) one product and records its Undo step. Returns
+  // what happened, or null on error. Callers handle messages and reloading.
+  const removeOne = async (id: string): Promise<'deleted' | 'archived' | null> => {
     const item = items.find((i) => i.id === id)
     // Deleting an item cascades to item_variants/item_images/item_colorways
     // (on delete cascade in the schema) and, transitively, inventory rows
@@ -300,16 +337,71 @@ export default function AdminProducts() {
     const inventoryRes = skus.length > 0 ? await supabase.from('inventory').select('*').in('sku', skus) : null
     const removedInventory = (inventoryRes?.data ?? []) as InventoryRow[]
 
-    const { error: deleteError } = await supabase.from('items').delete().eq('id', id)
-    if (deleteError) return setError(deleteError.message)
+    // delete_or_archive_item (024): deletes outright when nothing references
+    // the product; if it has stock history, sales or orders it is archived
+    // instead — hidden everywhere (store, this list, Inventory, Sales) while
+    // past orders keep pointing at it.
+    const { data: outcome, error: deleteError } = await supabase.rpc('delete_or_archive_item', { p_item_id: id })
+    if (deleteError) {
+      setError(item ? `${item.name}: ${deleteError.message}` : deleteError.message)
+      return null
+    }
+    if (outcome === 'archived') {
+      if (item) {
+        recordAction(`Remove product — ${item.name}`, async () => {
+          await supabase.rpc('restore_archived_item', { p_item_id: id })
+          await supabase.from('items').update({ is_active: item.is_active }).eq('id', id)
+        })
+      }
+      return 'archived'
+    }
     if (item) {
       recordAction(`Delete product — ${item.name}`, async () => {
-        await supabase.from('items').insert(item)
+        const { cost_price: removedCost, ...itemRow } = item
+        await supabase.from('items').insert(itemRow)
+        await supabase.from('item_costs').upsert({ item_id: item.id, cost_price: removedCost ?? 0 })
         if (removedVariants.length > 0) await supabase.from('item_variants').insert(removedVariants)
         if (removedColorways.length > 0) await supabase.from('item_colorways').insert(removedColorways)
         if (removedGallery.length > 0) await supabase.from('item_images').insert(removedGallery)
         if (removedInventory.length > 0) await supabase.from('inventory').insert(removedInventory)
       })
+    }
+    return 'deleted'
+  }
+
+  const removeItem = async (id: string) => {
+    const item = items.find((i) => i.id === id)
+    setInfo(null)
+    const outcome = await removeOne(id)
+    if (outcome === 'archived' && item) {
+      setInfo(`"${item.name}" was removed from the store, Inventory and Sales. It has past orders or stock history, so it's kept in the records for those orders.`)
+    }
+    load()
+  }
+
+  // Select mode: delete several products at once. Each still gets its own
+  // Undo step, so a mistaken bulk delete can be walked back.
+  const removeSelected = async () => {
+    const ids = [...selectedIds]
+    setInfo(null)
+    setBulkDeleting(true)
+    let deleted = 0
+    let archived = 0
+    for (const id of ids) {
+      const outcome = await removeOne(id)
+      if (outcome === 'deleted') deleted += 1
+      if (outcome === 'archived') archived += 1
+    }
+    setBulkDeleting(false)
+    setSelectedIds(new Set())
+    setSelectMode(false)
+    const done = deleted + archived
+    if (done > 0) {
+      setInfo(
+        `Removed ${done} ${done === 1 ? 'product' : 'products'}.` +
+          (archived > 0 ? ` ${archived} had past orders or stock history, so ${archived === 1 ? 'it is' : 'they are'} kept in the records for those orders.` : '') +
+          ' Click Undo at the top of this page to bring them back.',
+      )
     }
     load()
   }
@@ -519,55 +611,82 @@ export default function AdminProducts() {
     if (expandedId) loadVariants(expandedId)
   }
 
+  // ---- list view helpers (display only — no data logic below) ----
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'showing' | 'hidden'>('all')
+  // One shared "Are you sure?" dialog (delete product / colorway / size,
+  // discard unsaved edits).
+  const [info, setInfo] = useState<string | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const startSelectMode = () => {
+    setSelectMode(true)
+    setEditingId(null)
+    setDraft(null)
+    setExpandedId(null)
+  }
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+  const [confirm, setConfirm] = useState<{ title: string; subtitle?: string; body: string; confirmLabel: string; onConfirm: () => void } | null>(null)
+
+  const categoryLabel = (slug: string) => categoryOptions.find((c) => c.slug === slug)?.label ?? slug
+  const query = search.trim().toLowerCase()
+  const showingCount = items.filter((i) => i.is_active).length
+  const visibleItems = items.filter((item) => {
+    if (statusFilter === 'showing' && !item.is_active) return false
+    if (statusFilter === 'hidden' && item.is_active) return false
+    if (!query) return true
+    return [item.name, item.brand, item.category, categoryLabel(item.category), item.gender].some((s) => (s ?? '').toLowerCase().includes(query))
+  })
+  const allShownSelected = visibleItems.length > 0 && visibleItems.every((it) => selectedIds.has(it.id))
+  const selectedNames = items.filter((it) => selectedIds.has(it.id)).map((it) => it.name)
+  // Move up/down swaps with the neighbour in the full list, so it's only
+  // offered while the full list is on screen.
+  const isFiltered = query !== '' || statusFilter !== 'all'
+
+  const draftOriginal = editingId ? items.find((i) => i.id === editingId) : undefined
+  const draftIsDirty = !!draft && (!draftOriginal || JSON.stringify(draftOriginal) !== JSON.stringify(draft))
+
+  const requestCancelEdit = () => {
+    if (!draftIsDirty) return cancelEdit()
+    setConfirm({
+      title: 'Discard your changes?',
+      subtitle: draft?.name,
+      body: 'You have edits to this product that haven’t been saved. Closing now throws them away.',
+      confirmLabel: 'Discard changes',
+      onConfirm: cancelEdit,
+    })
+  }
+
+  const marginNote = (price: number, cost: number) =>
+    cost > 0 && price > 0 ? (
+      <span className="rk-cms-prod-margin">
+        Profit per pair: ₱{(price - cost).toLocaleString()} ({(((price - cost) / price) * 100).toFixed(1)}% margin)
+      </span>
+    ) : (
+      <span className="rk-ui-field-hint">Enter both price and cost to see your profit per pair.</span>
+    )
+
+  const genderSelect = (value: Gender, onChange: (g: Gender) => void) => (
+    <select value={value} onChange={(e) => onChange(e.target.value as Gender)}>
+      {genders.map((g) => <option key={g} value={g}>{genderLabels[g]}</option>)}
+    </select>
+  )
+
   return (
     <div>
       <style>{adminCardStyles}</style>
       <style>{`
-        .rk-prod-thumb {
-          width: 44px;
-          height: 44px;
-          border-radius: 0.5rem;
-          overflow: hidden;
-          background: var(--placeholder-bg);
-          flex-shrink: 0;
-        }
-        .rk-prod-thumb img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .rk-prod-name-cell {
-          display: flex;
-          align-items: center;
-          gap: 0.625rem;
-        }
-        .rk-prod-edit-panel {
-          background: var(--bg-secondary);
-        }
-        .rk-prod-edit-panel td {
-          padding: 1rem !important;
-        }
-        .rk-prod-edit-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-          gap: 0.625rem;
-          margin-bottom: 0.75rem;
-        }
-        .rk-prod-edit-grid input,
-        .rk-prod-edit-grid select,
-        .rk-prod-edit-grid textarea {
-          width: 100%;
-          border: 1px solid var(--border);
-          border-radius: 0.5rem;
-          padding: 0.625rem 0.75rem;
-          font-size: 0.8125rem;
-          background: var(--bg);
-          color: var(--text);
-        }
-        .rk-prod-edit-full {
-          grid-column: 1 / -1;
-        }
         .rk-image-list {
           display: flex;
           flex-wrap: wrap;
@@ -581,6 +700,7 @@ export default function AdminProducts() {
           border-radius: 0.5rem;
           overflow: hidden;
           background: var(--placeholder-bg);
+          border: 1px solid var(--border);
         }
         .rk-image-chip img {
           width: 100%;
@@ -590,85 +710,51 @@ export default function AdminProducts() {
         }
         .rk-image-remove {
           position: absolute;
-          top: 2px;
-          right: 2px;
-          width: 18px;
-          height: 18px;
+          top: 3px;
+          right: 3px;
+          width: 22px;
+          height: 22px;
           border-radius: 50%;
-          background: rgba(0, 0, 0, 0.65);
+          background: rgba(0, 0, 0, 0.7);
           color: #fff;
           border: none;
-          font-size: 11px;
+          font-size: 13px;
           line-height: 1;
           cursor: pointer;
         }
-        .rk-image-add-row {
-          display: flex;
-          gap: 0.5rem;
-        }
-        .rk-variants-section {
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid var(--border);
-        }
-        .rk-variants-title {
-          font-size: 0.75rem;
+        .rk-cms-prod-first {
+          position: absolute;
+          left: 3px;
+          bottom: 3px;
+          font-size: 9px;
           font-weight: 800;
-          letter-spacing: 0.06em;
           text-transform: uppercase;
-          color: var(--text-faint);
-          margin-bottom: 0.625rem;
+          padding: 0.1rem 0.35rem;
+          border-radius: 999px;
+          background: rgba(0, 0, 0, 0.7);
+          color: #fff;
         }
-        .rk-variant-row {
-          display: flex;
-          align-items: center;
-          gap: 0.625rem;
-          background: var(--bg);
-          border-radius: 0.625rem;
-          padding: 0.5rem 0.75rem;
-          margin-bottom: 0.5rem;
-          font-size: 0.8125rem;
-        }
-        .rk-variant-size {
-          font-weight: 700;
-          min-width: 3.5rem;
-        }
-        .rk-variant-color {
-          color: var(--text-muted);
-          min-width: 6rem;
-        }
-        .rk-variant-sku {
-          color: var(--text-faint);
+        .rk-cms-prod-margin {
           font-size: 0.75rem;
-          flex: 1;
+          font-weight: 700;
+          color: var(--text);
         }
-        .rk-variant-stock {
-          width: 4.5rem;
+        .rk-cms-prod-private {
+          display: inline-block;
+          font-size: 0.625rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          padding: 0.1rem 0.4rem;
+          border-radius: 999px;
+          background: var(--bg-secondary);
           border: 1px solid var(--border);
-          border-radius: 0.375rem;
-          padding: 0.25rem 0.5rem;
-          background: var(--bg);
-          color: var(--text);
-          font-size: 0.75rem;
-        }
-        .rk-variant-add-row {
-          display: flex;
-          align-items: flex-end;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          margin-top: 0.5rem;
-        }
-        .rk-gallery-color-group {
-          margin-bottom: 1rem;
-        }
-        .rk-gallery-color-name {
-          font-size: 0.8125rem;
-          font-weight: 700;
-          color: var(--text);
-          margin-bottom: 0.5rem;
+          color: var(--text-muted);
+          margin-left: 0.375rem;
+          vertical-align: middle;
         }
         .rk-colorway-group {
-          background: var(--bg);
+          background: var(--bg-secondary);
           border: 1px solid var(--border);
           border-radius: 0.75rem;
           padding: 0.875rem;
@@ -678,6 +764,7 @@ export default function AdminProducts() {
           display: flex;
           align-items: center;
           gap: 0.75rem;
+          flex-wrap: wrap;
           margin-bottom: 0.75rem;
         }
         .rk-colorway-swatch-preview {
@@ -686,7 +773,15 @@ export default function AdminProducts() {
           border-radius: 0.625rem;
           overflow: hidden;
           background: var(--placeholder-bg);
+          border: 1px solid var(--border);
           flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.5625rem;
+          font-weight: 700;
+          color: var(--text-faint);
+          text-align: center;
         }
         .rk-colorway-swatch-preview img {
           width: 100%;
@@ -696,7 +791,7 @@ export default function AdminProducts() {
         }
         .rk-colorway-head-main {
           flex: 1;
-          min-width: 0;
+          min-width: 10rem;
           display: flex;
           flex-direction: column;
           gap: 0.375rem;
@@ -706,306 +801,608 @@ export default function AdminProducts() {
           font-weight: 800;
           color: var(--text);
         }
-        .rk-variant-add-row input {
+        .rk-cms-prod-sub {
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: var(--text-muted);
+          margin-bottom: 0.5rem;
+        }
+        .rk-cms-prod-variant-stock {
+          display: flex;
+          align-items: center;
+          gap: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: var(--text-muted);
+        }
+        .rk-cms-prod-variant-stock input {
+          width: 4.75rem;
           border: 1px solid var(--border);
           border-radius: 0.5rem;
-          padding: 0.5rem 0.625rem;
-          font-size: 0.8125rem;
+          padding: 0.4rem 0.5rem;
           background: var(--bg);
           color: var(--text);
+          font: inherit;
+          font-size: 0.8125rem;
+        }
+        .rk-cms-prod-sku {
+          font-family: ui-monospace, monospace;
+          font-size: 0.6875rem;
+          color: var(--text-faint);
+        }
+        .rk-cms-prod-variant-form {
+          grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+          margin-top: 0.875rem;
+          align-items: end;
         }
       `}</style>
 
-      {error && (
-        <div className="rk-admin-card">
-          <p className="rk-admin-card-desc" style={{ color: 'var(--accent-red)', margin: 0 }}>{error}</p>
-        </div>
-      )}
+      {error && <Notice tone="alert" onDismiss={() => setError(null)}>{error}</Notice>}
+      {info && <Notice tone="ok" onDismiss={() => setInfo(null)}>{info}</Notice>}
 
       <div className="rk-admin-card">
-        <div className="rk-admin-card-head">
-          <div>
-            <h2 className="rk-admin-card-title"><IconBox /> Product Catalog</h2>
-            <div className="rk-admin-table-count">{items.length} products total</div>
-          </div>
-          <button className="rk-admin-primary-btn" onClick={() => setAdding((a) => !a)}>+ Add Product</button>
-        </div>
+        <SectionHead
+          icon={<IconBox />}
+          title="Products"
+          desc="Every shoe in your store. Use Edit details for name, price, points and card photos; use Sizes & photos for colorways, angle photos and stock per size. The order here is the order on the store."
+          actions={
+            <>
+              {items.length > 0 && (
+                <button
+                  type="button"
+                  className={`rk-ui-btn rk-ui-btn-lg ${selectMode ? 'rk-cms-select-on' : ''}`}
+                  onClick={selectMode ? exitSelectMode : startSelectMode}
+                  aria-pressed={selectMode}
+                >
+                  {selectMode ? 'Done selecting' : 'Select'}
+                </button>
+              )}
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
+                {adding ? 'Close' : '+ Add product'}
+              </button>
+            </>
+          }
+        />
 
         {adding && (
-          <div className="rk-admin-form-panel">
-            <div className="rk-prod-edit-grid">
-              <label className="rk-field">
-                <span className="rk-field-label">Name</span>
-                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <div className="rk-cms-add-panel">
+            <p className="rk-cms-panel-title">New product</p>
+
+            <section className="rk-cms-group">
+              <h3 className="rk-cms-group-title">Basics</h3>
+              <p className="rk-cms-group-desc">What the shoe is and where it shows up on the store.</p>
+              <div className="rk-ui-form">
+                <label className="rk-ui-field">
+                  <span>Product name (required)</span>
+                  <input placeholder="e.g. Air Runner 2" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                </label>
+                <label className="rk-ui-field">
+                  <span>Brand</span>
+                  <input value={form.brand} onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value }))} />
+                </label>
+                <label className="rk-ui-field">
+                  <span>Category (required)</span>
+                  <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+                    <option value="" disabled>Choose a category…</option>
+                    {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                  </select>
+                  <span className="rk-ui-field-hint">Which menu link it appears under. Manage the list in Categories.</span>
+                </label>
+                <label className="rk-ui-field">
+                  <span>Who it’s for</span>
+                  {genderSelect(form.gender, (g) => setForm((f) => ({ ...f, gender: g })))}
+                </label>
+                <label className="rk-ui-field rk-ui-field-full">
+                  <span>Description</span>
+                  <textarea rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+                  <span className="rk-ui-field-hint">Shown on the product page.</span>
+                </label>
+              </div>
+            </section>
+
+            <section className="rk-cms-group">
+              <h3 className="rk-cms-group-title">Pricing</h3>
+              <p className="rk-cms-group-desc">The selling price shoppers pay, and what you paid so you can see your profit.</p>
+              <div className="rk-ui-form">
+                <label className="rk-ui-field">
+                  <span>Selling price (₱)</span>
+                  <input type="number" min={0} placeholder="0" value={form.base_price} onChange={(e) => setForm((f) => ({ ...f, base_price: e.target.value }))} />
+                </label>
+                <label className="rk-ui-field">
+                  <span>Cost price (₱) <span className="rk-cms-prod-private">Staff only</span></span>
+                  <input type="number" min={0} placeholder="0" value={form.cost_price} onChange={(e) => setForm((f) => ({ ...f, cost_price: e.target.value }))} />
+                  <span className="rk-ui-field-hint">What you paid per pair. Never shown to shoppers.</span>
+                </label>
+                <div className="rk-ui-field">
+                  <span>Profit</span>
+                  {marginNote(Number(form.base_price) || 0, Number(form.cost_price) || 0)}
+                </div>
+              </div>
+            </section>
+
+            <section className="rk-cms-group">
+              <h3 className="rk-cms-group-title">Loyalty points</h3>
+              <p className="rk-cms-group-desc">Whether buying this shoe earns the customer reward points.</p>
+              <label className="rk-cms-check">
+                <input type="checkbox" checked={form.earns_loyalty} onChange={(e) => setForm((f) => ({ ...f, earns_loyalty: e.target.checked }))} />
+                <span>Earns loyalty points</span>
               </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Brand</span>
-                <input value={form.brand} onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Category</span>
-                <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
-                  <option value="" disabled>Select a category</option>
-                  {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-                </select>
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Gender</span>
-                <select value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value as Gender }))}>
-                  {genders.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Price</span>
-                <input type="number" value={form.base_price} onChange={(e) => setForm((f) => ({ ...f, base_price: e.target.value }))} />
-              </label>
-              <label className="rk-field rk-prod-edit-full">
-                <span className="rk-field-label">Description</span>
-                <textarea rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-              </label>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="rk-admin-add-btn" onClick={addItem}>Save Product</button>
+              {form.earns_loyalty && (
+                <div className="rk-ui-form" style={{ marginTop: '0.75rem' }}>
+                  <label className="rk-ui-field">
+                    <span>Custom points per pair</span>
+                    <input type="number" min={0} step={1} placeholder="Store default" value={form.points_value} onChange={(e) => setForm((f) => ({ ...f, points_value: e.target.value }))} />
+                    <span className="rk-ui-field-hint">Leave blank to use the store’s default earning rate.</span>
+                  </label>
+                </div>
+              )}
+            </section>
+
+            <p className="rk-ui-field-hint" style={{ margin: 0 }}>
+              After adding, use <b>Edit details</b> to add card photos and <b>Sizes &amp; photos</b> to add colorways and sizes.
+            </p>
+            <div className="rk-cms-form-actions">
+              {(!form.name.trim() || !form.category.trim()) && <span className="rk-cms-form-actions-note">A name and category are needed to save.</span>}
+              <button type="button" className="rk-ui-btn" onClick={() => { setAdding(false); setForm(emptyForm) }}>Cancel</button>
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addItem} disabled={!form.name.trim() || !form.category.trim()}>Add product</button>
             </div>
           </div>
         )}
 
-        <div className="rk-admin-table-wrap">
-          <table className="rk-admin-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Name</th>
-                <th>Price</th>
-                <th>Category</th>
-                <th>Gender</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center' }}>Loading…</td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center' }}>No products yet.</td></tr>
-              ) : (
-                items.map((item, i) => {
-                  const isEditing = editingId === item.id
-                  const isExpanded = expandedId === item.id
-                  return (
-                    <Fragment key={item.id}>
-                      <tr>
-                        <td style={{ display: 'flex', gap: '0.125rem', flexDirection: 'column' }}>
-                          <button className="rk-admin-icon-btn" onClick={() => moveItem(item.id, -1)} disabled={i === 0} aria-label="Move up"><UpIcon /></button>
-                          <button className="rk-admin-icon-btn" onClick={() => moveItem(item.id, 1)} disabled={i === items.length - 1} aria-label="Move down"><DownIcon /></button>
-                        </td>
-                        <td>
-                          <div className="rk-prod-name-cell">
-                            <button className="rk-admin-icon-btn" onClick={() => toggleExpand(item)} aria-label="Toggle variants">
-                              <ChevronIcon open={isExpanded} />
-                            </button>
-                            <div className="rk-prod-thumb">
-                              {item.image_urls[0] ? <img src={item.image_urls[0]} alt="" /> : null}
-                            </div>
-                            {item.name}
-                          </div>
-                        </td>
-                        <td><Money amount={item.base_price} /></td>
-                        <td>{item.category}</td>
-                        <td>{item.gender}</td>
-                        <td>
-                          <button
-                            className={`rk-admin-badge ${item.is_active ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
-                            style={{ border: 'none', cursor: 'pointer' }}
-                            onClick={() => toggleActive(item)}
-                          >
-                            {item.is_active ? 'Active' : 'Hidden'}
-                          </button>
-                        </td>
-                        <td>
-                          <div className="rk-admin-table-actions">
-                            <button className="rk-admin-icon-btn" onClick={() => startEdit(item)} aria-label="Edit"><EditIcon /></button>
-                            <button className="rk-admin-icon-btn" onClick={() => removeItem(item.id)} aria-label="Delete"><TrashIcon /></button>
-                          </div>
-                        </td>
-                      </tr>
+        <Toolbar>
+          <SearchInput value={search} onChange={setSearch} placeholder="Search by name, brand or category" />
+          <Segmented
+            label="Show"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: 'all', label: 'All', count: items.length },
+              { value: 'showing', label: 'Showing', count: showingCount },
+              { value: 'hidden', label: 'Hidden', count: items.length - showingCount },
+            ]}
+          />
+        </Toolbar>
+        {isFiltered && visibleItems.length > 0 && !selectMode && (
+          <p className="rk-ui-field-hint" style={{ margin: '-0.375rem 0 0.75rem' }}>Clear the search and choose “All” to change the order.</p>
+        )}
+        {selectMode && (
+          <div className="rk-cms-select-bar" role="region" aria-label="Selected products">
+            <label className="rk-cms-check">
+              <input
+                type="checkbox"
+                checked={allShownSelected}
+                onChange={() =>
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev)
+                    for (const it of visibleItems) {
+                      if (allShownSelected) next.delete(it.id)
+                      else next.add(it.id)
+                    }
+                    return next
+                  })
+                }
+              />
+              <span>Select all{isFiltered ? ' shown' : ''} ({visibleItems.length})</span>
+            </label>
+            <span className="rk-cms-select-count">
+              {selectedIds.size === 0 ? 'Tick the products you want to delete' : `${selectedIds.size} selected`}
+            </span>
+            <div className="rk-cms-select-actions">
+              <button type="button" className="rk-ui-btn" onClick={exitSelectMode} disabled={bulkDeleting}>Cancel</button>
+              <button
+                type="button"
+                className="rk-ui-btn rk-ui-btn-danger rk-ui-btn-lg"
+                disabled={selectedIds.size === 0 || bulkDeleting}
+                onClick={() =>
+                  setConfirm({
+                    title: `Delete ${selectedIds.size} ${selectedIds.size === 1 ? 'product' : 'products'}?`,
+                    subtitle: selectedNames.slice(0, 4).join(', ') + (selectedNames.length > 4 ? ` and ${selectedNames.length - 4} more` : ''),
+                    body: 'They disappear from the store, Inventory and the Sales screen right away. Products that were never sold or stocked are deleted completely; ones with past orders or stock history are removed but kept in the records so old orders still show them. Removed by mistake? Click Undo at the top of this page.',
+                    confirmLabel: `Yes, delete ${selectedIds.size}`,
+                    onConfirm: removeSelected,
+                  })
+                }
+              >
+                {bulkDeleting ? 'Deleting…' : `Delete selected (${selectedIds.size})`}
+              </button>
+            </div>
+          </div>
+        )}
 
-                      {isEditing && draft && draft.id === item.id && (
-                        <tr>
-                          <td colSpan={7} className="rk-prod-edit-panel">
-                            <div className="rk-prod-edit-grid">
-                              <label className="rk-field">
-                                <span className="rk-field-label">Name</span>
-                                <input value={draft.name} onChange={(e) => updateDraft({ name: e.target.value })} />
-                              </label>
-                              <label className="rk-field">
-                                <span className="rk-field-label">Brand</span>
-                                <input value={draft.brand} onChange={(e) => updateDraft({ brand: e.target.value })} />
-                              </label>
-                              <label className="rk-field">
-                                <span className="rk-field-label">Category</span>
-                                <select value={draft.category} onChange={(e) => updateDraft({ category: e.target.value })}>
-                                  {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-                                </select>
-                              </label>
-                              <label className="rk-field">
-                                <span className="rk-field-label">Gender</span>
-                                <select value={draft.gender} onChange={(e) => updateDraft({ gender: e.target.value as Gender })}>
-                                  {genders.map((g) => <option key={g} value={g}>{g}</option>)}
-                                </select>
-                              </label>
-                              <label className="rk-field">
-                                <span className="rk-field-label">Price</span>
-                                <input type="number" value={draft.base_price} onChange={(e) => updateDraft({ base_price: Number(e.target.value) })} />
-                              </label>
-                              <label className="rk-field rk-prod-edit-full">
-                                <span className="rk-field-label">Description</span>
-                                <textarea rows={2} value={draft.description} onChange={(e) => updateDraft({ description: e.target.value })} />
-                              </label>
-                            </div>
-
-                            <div className="rk-variants-title">Card Images</div>
-                            <p className="rk-admin-card-desc" style={{ margin: '0 0 0.625rem' }}>Used on product cards and search results. For per-colorway photo sets, use the gallery below.</p>
-                            <div className="rk-image-list">
-                              {draft.image_urls.map((url, idx) => (
-                                <div key={idx} className="rk-image-chip">
-                                  <img src={url} alt="" />
-                                  <button className="rk-image-remove" onClick={() => removeImage(idx)} aria-label="Remove image">×</button>
-                                </div>
-                              ))}
-                            </div>
-                            <ImageUploadButton label="+ Upload Image" onUploaded={addImage} />
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-                              <button className="rk-admin-icon-btn" onClick={undoDraft} disabled={draftHistory.length === 0} aria-label="Undo last change" title="Undo last change">
-                                <IconUndo size={15} />
-                              </button>
-                              <button className="rk-admin-icon-btn" onClick={resetDraft} aria-label="Reset to saved values" title="Reset to saved values">
-                                <IconReset size={15} />
-                              </button>
-                              <button className="rk-admin-add-btn" onClick={saveEdit}>Save Product</button>
-                            </div>
-                          </td>
-                        </tr>
+        {loading ? (
+          <p className="rk-admin-empty">Loading…</p>
+        ) : items.length === 0 ? (
+          <EmptyState
+            title="No products yet"
+            hint="Add your first shoe, then give it photos and sizes."
+            action={!adding && <button type="button" className="rk-ui-btn rk-ui-btn-primary" onClick={() => setAdding(true)}>+ Add your first product</button>}
+          />
+        ) : visibleItems.length === 0 ? (
+          <EmptyState
+            title="No products match"
+            hint={query ? `Nothing found for “${search.trim()}”.` : 'No products with this status.'}
+            action={<button type="button" className="rk-ui-btn" onClick={() => { setSearch(''); setStatusFilter('all') }}>Show all products</button>}
+          />
+        ) : (
+          <div className={`rk-ui-list rk-cms-list ${selectMode ? 'rk-cms-selecting' : ''}`}>
+            {visibleItems.map((item) => {
+              const i = items.indexOf(item)
+              const isEditing = editingId === item.id
+              const isExpanded = expandedId === item.id
+              return (
+                <div key={item.id}>
+                  <div
+                    className={`rk-ui-list-row ${item.is_active ? '' : 'rk-cms-row-hidden'} ${selectMode && selectedIds.has(item.id) ? 'rk-cms-row-selected' : ''}`}
+                    onClick={selectMode ? () => toggleSelected(item.id) : undefined}
+                    style={selectMode ? { cursor: 'pointer' } : undefined}
+                  >
+                    {selectMode ? (
+                      <input
+                        type="checkbox"
+                        className="rk-cms-row-check"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleSelected(item.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${item.name}`}
+                      />
+                    ) : (
+                      <MoveButtons
+                        what="product"
+                        onUp={() => moveItem(item.id, -1)}
+                        onDown={() => moveItem(item.id, 1)}
+                        upDisabled={isFiltered || i === 0}
+                        downDisabled={isFiltered || i === items.length - 1}
+                      />
+                    )}
+                    <div className="rk-cms-thumb">{item.image_urls[0] ? <img src={item.image_urls[0]} alt="" /> : 'No photo'}</div>
+                    <div className="rk-ui-list-main">
+                      <div className="rk-ui-list-title">{item.name}</div>
+                      <div className="rk-ui-list-meta">
+                        <Money amount={item.base_price} /> · {item.brand} · {categoryLabel(item.category)} · {genderLabels[item.gender] ?? item.gender}
+                      </div>
+                      {item.earns_loyalty === false && (
+                        <div className="rk-cms-chips"><span className="rk-cms-chip">No loyalty points</span></div>
                       )}
+                    </div>
+                    <div className="rk-ui-list-side">
+                      <Pill tone={item.is_active ? 'ok' : 'neutral'}>{item.is_active ? 'Showing' : 'Hidden'}</Pill>
+                      <button type="button" className="rk-ui-btn" onClick={() => toggleActive(item)}>{item.is_active ? 'Hide' : 'Show'}</button>
+                      <button
+                        type="button"
+                        className={`rk-ui-btn ${isEditing ? 'rk-ui-btn-primary' : ''}`}
+                        onClick={() => (isEditing ? requestCancelEdit() : startEdit(item))}
+                        aria-expanded={isEditing}
+                      >
+                        <EditIcon /> {isEditing ? 'Close details' : 'Edit details'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`rk-ui-btn ${isExpanded ? 'rk-ui-btn-primary' : ''}`}
+                        onClick={() => toggleExpand(item)}
+                        aria-expanded={isExpanded}
+                      >
+                        <ChevronIcon open={isExpanded} /> Sizes &amp; photos
+                      </button>
+                      <button
+                        type="button"
+                        className="rk-ui-btn rk-ui-btn-danger"
+                        onClick={() =>
+                          setConfirm({
+                            title: 'Delete this product?',
+                            subtitle: item.name,
+                            body: 'It disappears from the store, Inventory and the Sales screen right away. If it was never sold or stocked it is deleted completely; if it has past orders or stock history it is removed but kept in the records so old orders still show it. To take it off the store for now, use Hide instead. Removed by mistake? Click Undo at the top of this page.',
+                            confirmLabel: 'Yes, delete',
+                            onConfirm: () => removeItem(item.id),
+                          })
+                        }
+                      >
+                        <TrashIcon /> Delete
+                      </button>
+                    </div>
+                  </div>
 
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={7} className="rk-prod-edit-panel">
-                            <div className="rk-variants-title">Colorways</div>
-                            <p className="rk-admin-card-desc" style={{ margin: '0 0 0.75rem' }}>
-                              Add a colorway, then give it a swatch photo (the small switcher button on the product page) and a set of angle photos (the gallery shown once that swatch is picked) — matching the Nike/SNKRS-style colorway switcher.
-                            </p>
-                            {colorways.length === 0 ? (
-                              <p className="rk-admin-empty">No colorways yet — add one below.</p>
-                            ) : (
-                              colorways.map((cw) => {
-                                const photos = gallery.filter((g) => g.color === cw.color).sort((a, b) => a.sort_order - b.sort_order)
-                                return (
-                                  <div key={cw.id} className="rk-colorway-group">
-                                    <div className="rk-colorway-head">
-                                      <div className="rk-colorway-swatch-preview">
-                                        {cw.swatch_url ? <img src={cw.swatch_url} alt="" /> : null}
-                                      </div>
-                                      <div className="rk-colorway-head-main">
-                                        <div className="rk-colorway-name">{cw.color}</div>
-                                        <ImageUploadButton
-                                          label={cw.swatch_url ? 'Replace Colorway Photo' : '+ Colorway Photo'}
-                                          aspect={1}
-                                          onUploaded={(url) => setColorwaySwatch(cw.id, url)}
-                                        />
-                                      </div>
-                                      <button className="rk-admin-icon-btn" onClick={() => removeColorway(cw)} aria-label={`Remove ${cw.color} colorway`}><TrashIcon /></button>
-                                    </div>
+                  {isEditing && draft && draft.id === item.id && (
+                    <div className="rk-cms-edit-panel">
+                      <p className="rk-cms-panel-title">Editing {draft.name || 'product'}</p>
 
-                                    <div className="rk-gallery-color-name">Angle Photos</div>
-                                    <div className="rk-image-list">
-                                      {photos.map((g) => (
-                                        <div key={g.id} className="rk-image-chip">
-                                          <img src={g.image_url} alt="" />
-                                          <button className="rk-image-remove" onClick={() => removeGalleryImage(g.id)} aria-label="Remove photo">×</button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <ImageUploadButton label="+ Add Angle Photo" onUploaded={(url) => addGalleryImage(cw.color, url)} />
-                                  </div>
-                                )
-                              })
-                            )}
-                            <div className="rk-admin-add-row" style={{ marginTop: colorways.length ? '0.875rem' : 0 }}>
-                              <input
-                                className="rk-admin-add-input"
-                                placeholder="New colorway name, e.g. Triple Black"
-                                value={newColorwayName}
-                                onChange={(e) => setNewColorwayName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && addColorway()}
-                              />
-                              <button className="rk-admin-add-btn" onClick={addColorway} disabled={!newColorwayName.trim()}>+ Add Colorway</button>
-                            </div>
-
-                            <div className="rk-variants-section">
-                              <div className="rk-variants-title">Sizes, Colors &amp; Stock</div>
-                              {variants.length === 0 ? (
-                                <p className="rk-admin-empty">No variants yet — add a size/color/stock combo below.</p>
-                              ) : (
-                                variants.map((v) => {
-                                  const inv = inventoryBySku[v.sku]
-                                  return (
-                                    <div key={v.id} className="rk-variant-row">
-                                      <span className="rk-variant-size">{v.size}</span>
-                                      <span className="rk-variant-color">{v.color}</span>
-                                      <span className="rk-variant-sku">{v.sku}</span>
-                                      <input
-                                        className="rk-variant-stock"
-                                        type="number"
-                                        value={inv?.quantity_on_hand ?? 0}
-                                        onChange={(e) => updateStock(v.sku, Number(e.target.value))}
-                                      />
-                                      <button className="rk-admin-icon-btn" onClick={() => removeVariant(v.id)} aria-label="Remove variant"><TrashIcon /></button>
-                                    </div>
-                                  )
-                                })
+                      <section className="rk-cms-group">
+                        <h3 className="rk-cms-group-title">Basics</h3>
+                        <p className="rk-cms-group-desc">What the shoe is and where it shows up on the store.</p>
+                        <div className="rk-ui-form">
+                          <label className="rk-ui-field">
+                            <span>Product name</span>
+                            <input value={draft.name} onChange={(e) => updateDraft({ name: e.target.value })} />
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>Brand</span>
+                            <input value={draft.brand} onChange={(e) => updateDraft({ brand: e.target.value })} />
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>Category</span>
+                            <select value={draft.category} onChange={(e) => updateDraft({ category: e.target.value })}>
+                              {!categoryOptions.some((c) => c.slug === draft.category) && (
+                                <option value={draft.category}>{draft.category || 'None'} (not in the menu)</option>
                               )}
-                              <div className="rk-variant-add-row">
-                                <label className="rk-field">
-                                  <span className="rk-field-label">Size(s)</span>
-                                  <input
-                                    style={{ width: '11rem' }}
-                                    placeholder="e.g. 8, 9, 10"
-                                    title="Enter multiple sizes separated by commas or spaces to add them all at once, using the same color and stock."
-                                    value={variantForm.size}
-                                    onChange={(e) => setVariantForm((f) => ({ ...f, size: e.target.value }))}
-                                  />
-                                </label>
-                                <label className="rk-field">
-                                  <span className="rk-field-label">Color</span>
-                                  <select style={{ width: '9rem' }} value={variantForm.color} onChange={(e) => setVariantForm((f) => ({ ...f, color: e.target.value }))}>
-                                    <option value="">{colorways.length === 0 ? 'Add a colorway above' : 'Select colorway…'}</option>
-                                    {colorways.map((cw) => <option key={cw.id} value={cw.color}>{cw.color}</option>)}
-                                  </select>
-                                </label>
-                                <label className="rk-field">
-                                  <span className="rk-field-label">SKU (optional)</span>
-                                  <input value={variantForm.sku} onChange={(e) => setVariantForm((f) => ({ ...f, sku: e.target.value }))} />
-                                </label>
-                                <label className="rk-field">
-                                  <span className="rk-field-label">Stock (each size)</span>
-                                  <input type="number" style={{ width: '5rem' }} value={variantForm.quantity_on_hand} onChange={(e) => setVariantForm((f) => ({ ...f, quantity_on_hand: e.target.value }))} />
-                                </label>
-                                <button className="rk-admin-add-btn" onClick={addVariant} disabled={!variantForm.size.trim() || !variantForm.color} style={{ alignSelf: 'flex-end' }}>+ Add Size(s)</button>
+                              {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                            </select>
+                            <span className="rk-ui-field-hint">Which menu link it appears under.</span>
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>Who it’s for</span>
+                            {genderSelect(draft.gender, (g) => updateDraft({ gender: g }))}
+                          </label>
+                          <label className="rk-ui-field rk-ui-field-full">
+                            <span>Description</span>
+                            <textarea rows={3} value={draft.description} onChange={(e) => updateDraft({ description: e.target.value })} />
+                            <span className="rk-ui-field-hint">Shown on the product page.</span>
+                          </label>
+                        </div>
+                      </section>
+
+                      <section className="rk-cms-group">
+                        <h3 className="rk-cms-group-title">Pricing</h3>
+                        <p className="rk-cms-group-desc">The selling price shoppers pay, and what you paid so you can see your profit.</p>
+                        <div className="rk-ui-form">
+                          <label className="rk-ui-field">
+                            <span>Selling price (₱)</span>
+                            <input type="number" min={0} value={draft.base_price} onChange={(e) => updateDraft({ base_price: Number(e.target.value) })} />
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>Cost price (₱) <span className="rk-cms-prod-private">Staff only</span></span>
+                            <input type="number" min={0} value={draft.cost_price ?? 0} onChange={(e) => updateDraft({ cost_price: Number(e.target.value) })} />
+                            <span className="rk-ui-field-hint">What you paid per pair. Never shown to shoppers.</span>
+                          </label>
+                          <div className="rk-ui-field">
+                            <span>Profit</span>
+                            {marginNote(Number(draft.base_price), Number(draft.cost_price))}
+                          </div>
+                        </div>
+                      </section>
+
+                      <section className="rk-cms-group">
+                        <h3 className="rk-cms-group-title">Loyalty points</h3>
+                        <p className="rk-cms-group-desc">Whether buying this shoe earns the customer reward points.</p>
+                        <label className="rk-cms-check">
+                          <input type="checkbox" checked={draft.earns_loyalty !== false} onChange={(e) => updateDraft({ earns_loyalty: e.target.checked })} />
+                          <span>Earns loyalty points</span>
+                        </label>
+                        {draft.earns_loyalty !== false && (
+                          <div className="rk-ui-form" style={{ marginTop: '0.75rem' }}>
+                            <label className="rk-ui-field">
+                              <span>Custom points per pair</span>
+                              <input type="number" min={0} step={1} value={draft.points_value ?? 0} onChange={(e) => updateDraft({ points_value: Number(e.target.value) })} />
+                              <span className="rk-ui-field-hint">0 = use the store’s default earning rate.</span>
+                            </label>
+                          </div>
+                        )}
+                      </section>
+
+                      <section className="rk-cms-group">
+                        <h3 className="rk-cms-group-title">Card photos</h3>
+                        <p className="rk-cms-group-desc">
+                          Shown on product cards and in search results — the first photo is the main one. Photos for each colorway are under <b>Sizes &amp; photos</b>.
+                        </p>
+                        {draft.image_urls.length > 0 ? (
+                          <div className="rk-image-list">
+                            {draft.image_urls.map((url, idx) => (
+                              <div key={idx} className="rk-image-chip">
+                                <img src={url} alt="" />
+                                {idx === 0 && <span className="rk-cms-prod-first">Main</span>}
+                                <button type="button" className="rk-image-remove" onClick={() => removeImage(idx)} aria-label={`Remove photo ${idx + 1}`} title="Remove this photo">×</button>
                               </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="rk-ui-field-hint" style={{ margin: '0 0 0.625rem' }}>No card photos yet — shoppers will see a blank card.</p>
+                        )}
+                        <ImageUploadButton label="+ Upload photo" onUploaded={addImage} />
+                      </section>
+
+                      <div className="rk-cms-form-actions">
+                        <span className="rk-cms-form-actions-note">
+                          {draftIsDirty ? <Pill tone="warn">Unsaved changes</Pill> : 'No changes yet'}
+                        </span>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-ghost" onClick={undoDraft} disabled={draftHistory.length === 0} title="Undo your last edit">
+                          <IconUndo size={14} /> Undo
+                        </button>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-ghost" onClick={resetDraft} disabled={!draftIsDirty} title="Go back to the saved version">
+                          <IconReset size={14} /> Reset
+                        </button>
+                        <button type="button" className="rk-ui-btn" onClick={requestCancelEdit}>Cancel</button>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={saveEdit} disabled={!draftIsDirty}>Save product</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isExpanded && (
+                    <div className="rk-cms-edit-panel">
+                      <p className="rk-cms-panel-title">Sizes &amp; photos — {item.name}</p>
+                      <p className="rk-ui-field-hint" style={{ margin: '-0.375rem 0 0.875rem' }}>Changes in this panel go live straight away (use Undo at the top to take one back).</p>
+
+                      <section className="rk-cms-group">
+                        <h3 className="rk-cms-group-title">Colorways &amp; photos</h3>
+                        <p className="rk-cms-group-desc">
+                          Each colorway gets a small swatch photo (the color picker button on the product page) and a set of angle photos (shown when that color is picked).
+                        </p>
+                        {colorways.length === 0 ? (
+                          <EmptyState title="No colorways yet" hint="Add one below, e.g. “Triple Black”. You need at least one before you can add sizes." />
+                        ) : (
+                          colorways.map((cw) => {
+                            const photos = gallery.filter((g) => g.color === cw.color).sort((a, b) => a.sort_order - b.sort_order)
+                            const inUse = variants.some((v) => v.color === cw.color)
+                            return (
+                              <div key={cw.id} className="rk-colorway-group">
+                                <div className="rk-colorway-head">
+                                  <div className="rk-colorway-swatch-preview">
+                                    {cw.swatch_url ? <img src={cw.swatch_url} alt="" /> : 'No swatch'}
+                                  </div>
+                                  <div className="rk-colorway-head-main">
+                                    <div className="rk-colorway-name">{cw.color}</div>
+                                    <ImageUploadButton
+                                      label={cw.swatch_url ? 'Replace swatch photo' : '+ Swatch photo'}
+                                      aspect={1}
+                                      onUploaded={(url) => setColorwaySwatch(cw.id, url)}
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="rk-ui-btn rk-ui-btn-danger"
+                                    disabled={inUse}
+                                    title={inUse ? 'Remove the sizes in this color first' : `Delete the ${cw.color} colorway`}
+                                    onClick={() =>
+                                      setConfirm({
+                                        title: 'Delete this colorway?',
+                                        subtitle: cw.color,
+                                        body: 'Its swatch and angle photos are removed from the product page. Deleted by mistake? Click Undo at the top of this page.',
+                                        confirmLabel: 'Yes, delete',
+                                        onConfirm: () => removeColorway(cw),
+                                      })
+                                    }
+                                  >
+                                    <TrashIcon /> Delete colorway
+                                  </button>
+                                </div>
+                                {inUse && <p className="rk-ui-field-hint" style={{ margin: '-0.375rem 0 0.625rem' }}>To delete this colorway, remove its sizes below first.</p>}
+
+                                <div className="rk-cms-prod-sub">Angle photos ({photos.length})</div>
+                                {photos.length > 0 && (
+                                  <div className="rk-image-list">
+                                    {photos.map((g, idx) => (
+                                      <div key={g.id} className="rk-image-chip">
+                                        <img src={g.image_url} alt="" />
+                                        <button type="button" className="rk-image-remove" onClick={() => removeGalleryImage(g.id)} aria-label={`Remove ${cw.color} photo ${idx + 1}`} title="Remove this photo">×</button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <ImageUploadButton label="+ Add angle photo" onUploaded={(url) => addGalleryImage(cw.color, url)} />
+                              </div>
+                            )
+                          })
+                        )}
+                        <div className="rk-cms-add-row">
+                          <input
+                            className="rk-cms-inline-input"
+                            placeholder="New colorway name, e.g. Triple Black"
+                            aria-label="New colorway name"
+                            value={newColorwayName}
+                            onChange={(e) => setNewColorwayName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && addColorway()}
+                          />
+                          <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addColorway} disabled={!newColorwayName.trim()}>+ Add colorway</button>
+                        </div>
+                      </section>
+
+                      <section className="rk-cms-group" style={{ marginBottom: 0 }}>
+                        <h3 className="rk-cms-group-title">Sizes &amp; stock</h3>
+                        <p className="rk-cms-group-desc">
+                          Each size + color shoppers can buy, and how many pairs you have. For day-to-day stock changes (deliveries, counts, damaged pairs), the Inventory tab keeps a history.
+                        </p>
+                        {variants.length === 0 ? (
+                          <EmptyState title="No sizes yet" hint="Add sizes below — shoppers can’t buy this shoe until it has at least one size." />
+                        ) : (
+                          <div className="rk-ui-list">
+                            {variants.map((v) => {
+                              const inv = inventoryBySku[v.sku]
+                              const qty = inv?.quantity_on_hand ?? 0
+                              const low = inv ? qty <= inv.reorder_level : false
+                              return (
+                                <div key={v.id} className={`rk-ui-list-row ${qty === 0 ? 'rk-ui-list-row-alert' : low ? 'rk-ui-list-row-warn' : ''}`}>
+                                  <div className="rk-ui-list-main">
+                                    <div className="rk-ui-list-title">Size {v.size} · {v.color}</div>
+                                    <div className="rk-ui-list-meta"><span className="rk-cms-prod-sku">SKU {v.sku}</span></div>
+                                  </div>
+                                  <div className="rk-ui-list-side">
+                                    <Pill tone={qty === 0 ? 'alert' : low ? 'warn' : 'ok'}>{qty === 0 ? 'Sold out' : low ? 'Running low' : 'In stock'}</Pill>
+                                    <label className="rk-cms-prod-variant-stock">
+                                      Pairs
+                                      <input type="number" min={0} value={qty} onChange={(e) => updateStock(v.sku, Number(e.target.value))} aria-label={`Pairs in stock, size ${v.size} ${v.color}`} />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      className="rk-ui-btn rk-ui-btn-danger"
+                                      onClick={() =>
+                                        setConfirm({
+                                          title: 'Remove this size?',
+                                          subtitle: `Size ${v.size} · ${v.color}`,
+                                          body: 'Shoppers will no longer be able to pick this size, and its stock count is removed. Removed by mistake? Click Undo at the top of this page.',
+                                          confirmLabel: 'Yes, remove',
+                                          onConfirm: () => removeVariant(v.id),
+                                        })
+                                      }
+                                    >
+                                      <TrashIcon /> Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        <div className="rk-ui-form rk-cms-prod-variant-form">
+                          <label className="rk-ui-field">
+                            <span>Size(s)</span>
+                            <input
+                              placeholder="e.g. 8, 9, 10"
+                              value={variantForm.size}
+                              onChange={(e) => setVariantForm((f) => ({ ...f, size: e.target.value }))}
+                            />
+                            <span className="rk-ui-field-hint">Separate with commas to add several at once.</span>
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>Color</span>
+                            <select value={variantForm.color} onChange={(e) => setVariantForm((f) => ({ ...f, color: e.target.value }))}>
+                              <option value="">{colorways.length === 0 ? 'Add a colorway first' : 'Choose a colorway…'}</option>
+                              {colorways.map((cw) => <option key={cw.id} value={cw.color}>{cw.color}</option>)}
+                            </select>
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>Pairs in stock (each size)</span>
+                            <input type="number" min={0} value={variantForm.quantity_on_hand} onChange={(e) => setVariantForm((f) => ({ ...f, quantity_on_hand: e.target.value }))} />
+                          </label>
+                          <label className="rk-ui-field">
+                            <span>SKU (optional)</span>
+                            <input placeholder="Made for you if blank" value={variantForm.sku} onChange={(e) => setVariantForm((f) => ({ ...f, sku: e.target.value }))} />
+                          </label>
+                        </div>
+                        <div className="rk-cms-form-actions">
+                          <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addVariant} disabled={!variantForm.size.trim() || !variantForm.color}>+ Add size(s)</button>
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
+
+      {confirm && (
+        <Modal
+          title={confirm.title}
+          subtitle={confirm.subtitle}
+          onClose={() => setConfirm(null)}
+          footer={
+            <>
+              <button type="button" className="rk-ui-btn" onClick={() => setConfirm(null)}>Keep it</button>
+              <button
+                type="button"
+                className="rk-ui-btn rk-ui-btn-danger"
+                onClick={() => {
+                  confirm.onConfirm()
+                  setConfirm(null)
+                }}
+              >
+                {confirm.confirmLabel}
+              </button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)' }}>{confirm.body}</p>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -10,6 +10,8 @@ import CategoryPage from './pages/CategoryPage'
 import ProductDetailPage from './pages/ProductDetailPage'
 import CollectionsPage from './pages/CollectionsPage'
 import HelpPage from './pages/HelpPage'
+import InfoPage from './pages/InfoPage'
+import ScrollToTop from './components/ScrollToTop'
 import AccountPage from './pages/AccountPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
 import AuthPage from './pages/AuthPage'
@@ -30,6 +32,7 @@ function App() {
         <ShopProvider>
           <AdminProvider>
             <BrowserRouter>
+              <ScrollToTop />
               <Routes>
                 <Route element={<StorefrontLayout />}>
                   <Route path="/" element={<Home />} />
@@ -37,6 +40,7 @@ function App() {
                   <Route path="/product/:id" element={<ProductDetailPage />} />
                   <Route path="/collections" element={<CollectionsPage />} />
                   <Route path="/help" element={<HelpPage />} />
+                  <Route path="/info/:slug" element={<InfoPage />} />
                   <Route path="/account" element={<AccountPage />} />
                   <Route path="/order/success" element={<OrderSuccessPage />} />
                 </Route>

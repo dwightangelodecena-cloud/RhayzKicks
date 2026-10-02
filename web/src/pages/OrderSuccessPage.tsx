@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import PageHero from '../components/PageHero'
 import { supabase } from '../supabase'
 import { useShop } from '../context/ShopContext'
+import { useAuth } from '../context/AuthContext'
 import { formatPeso } from '../data/catalog'
 
 interface OrderRow {
@@ -10,6 +11,7 @@ interface OrderRow {
   order_number: string
   status: string
   total: number
+  discount: number | null
 }
 
 const POLL_MS = 2500
@@ -27,6 +29,7 @@ export default function OrderSuccessPage() {
   const [params] = useSearchParams()
   const orderId = params.get('order_id')
   const { clearCart } = useShop()
+  const { refreshCustomer } = useAuth()
   const [order, setOrder] = useState<OrderRow | null>(null)
   const [error, setError] = useState<string | null>(null)
   const clearedRef = useRef(false)
@@ -42,7 +45,7 @@ export default function OrderSuccessPage() {
     const poll = async () => {
       const { data, error: fetchError } = await supabase
         .from('online_orders')
-        .select('id, order_number, status, total')
+        .select('id, order_number, status, total, discount')
         .eq('id', orderId)
         .maybeSingle()
       if (cancelled) return
@@ -55,6 +58,9 @@ export default function OrderSuccessPage() {
         if (!clearedRef.current) {
           clearedRef.current = true
           clearCart()
+          // Picks up the points the webhook just awarded (and pops the
+          // LoyaltyPointsPopup) even if Realtime isn't delivering.
+          refreshCustomer()
         }
         return
       }
@@ -66,7 +72,7 @@ export default function OrderSuccessPage() {
     return () => {
       cancelled = true
     }
-  }, [orderId, clearCart])
+  }, [orderId, clearCart, refreshCustomer])
 
   const confirmed = order?.status === 'paid' || order?.status === 'fulfilled'
 
@@ -129,7 +135,10 @@ export default function OrderSuccessPage() {
           <>
             <div className="rk-order-success-icon"><CheckIcon /></div>
             <div className="rk-order-success-number">{order.order_number}</div>
-            <p className="rk-order-success-total">{formatPeso(Number(order.total))} paid</p>
+            <p className="rk-order-success-total">
+              {formatPeso(Number(order.total))} paid
+              {Number(order.discount) > 0 && <> · voucher saved you {formatPeso(Number(order.discount))}</>}
+            </p>
             <p className="rk-order-success-note">
               Thanks for your order! We'll have it ready for pickup — bring your order number when you swing by.
             </p>

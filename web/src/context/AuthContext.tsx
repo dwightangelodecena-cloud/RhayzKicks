@@ -105,6 +105,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Live-updates the customer row so loyalty points awarded server-side (the
+  // PayMongo webhook for online orders, or a POS sale at the counter) show up
+  // without a reload — LoyaltyPointsPopup watches for the increase.
+  // Needs `customers` in the supabase_realtime publication (020_*.sql).
+  const customerId = customer?.id ?? null
+  useEffect(() => {
+    if (!customerId) return
+    const channel = supabase
+      .channel(`customer-${customerId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'customers', filter: `id=eq.${customerId}` },
+        (payload) => setCustomer(toCustomer(payload.new as Record<string, unknown>)),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [customerId])
+
   const refreshCustomer = useCallback(async () => {
     if (!user) return
     const { data, error } = await supabase.from('customers').select('*').eq('auth_user_id', user.id).maybeSingle()

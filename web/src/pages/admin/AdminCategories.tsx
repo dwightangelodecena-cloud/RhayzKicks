@@ -4,18 +4,30 @@ import { adminCardStyles } from './adminCardStyles'
 import { IconTags } from './adminIcons'
 import ImageUploadButton from './ImageUploadButton'
 import { useUndoLog } from '../../context/useUndoLog'
+import { EmptyState, Modal, Notice, Pill, SectionHead } from './adminUi'
 
 function EditIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
 }
 function TrashIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
 }
 function UpIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
 }
 function DownIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+}
+
+// Up/down arrows with a tooltip + screen-reader label (styled by the
+// .rk-cms-reorder rules in AdminCMS).
+function MoveButtons({ what, onUp, onDown, upDisabled, downDisabled }: { what: string; onUp: () => void; onDown: () => void; upDisabled: boolean; downDisabled: boolean }) {
+  return (
+    <div className="rk-cms-reorder">
+      <button type="button" onClick={onUp} disabled={upDisabled} aria-label={`Move ${what} up`} title={`Move ${what} up (shows earlier)`}><UpIcon /></button>
+      <button type="button" onClick={onDown} disabled={downDisabled} aria-label={`Move ${what} down`} title={`Move ${what} down (shows later)`}><DownIcon /></button>
+    </div>
+  )
 }
 
 interface NavCategoryRow {
@@ -153,102 +165,75 @@ export default function AdminCategories() {
     load()
   }
 
+  const cancelEdit = () => {
+    setEditingId(null)
+    setDraft(null)
+  }
+
+  const [confirmDelete, setConfirmDelete] = useState<NavCategoryRow | null>(null)
+
+  // Same fields for "add" and "edit".
+  const renderFields = (
+    v: { label: string; slug: string; image_url: string },
+    set: (key: 'label' | 'slug' | 'image_url', value: string) => void,
+    isNew: boolean,
+  ) => (
+    <div className="rk-ui-form">
+      <label className="rk-ui-field">
+        <span>Name (required)</span>
+        <input placeholder="e.g. Running" value={v.label} onChange={(e) => set('label', e.target.value)} />
+        <span className="rk-ui-field-hint">What shoppers see in the menu and on the card.</span>
+      </label>
+      <label className="rk-ui-field">
+        <span>Category ID{isNew ? ' (optional)' : ''}</span>
+        <input placeholder={isNew ? 'Made from the name if left blank' : ''} value={v.slug} onChange={(e) => set('slug', e.target.value)} />
+        <span className="rk-ui-field-hint">
+          Must match the category chosen on products, e.g. <code>running</code>. Use <code>new-releases</code> to show shoes added in the last 30 days.
+          {!isNew && ' Changing it changes which shoes appear.'}
+        </span>
+      </label>
+      <div className="rk-ui-field rk-ui-field-full">
+        <span>Card photo</span>
+        <div className="rk-cms-upload-row">
+          <div className="rk-cms-thumb">{v.image_url ? <img src={v.image_url} alt="" /> : 'No photo'}</div>
+          <ImageUploadButton label={v.image_url ? 'Change photo' : '+ Upload photo'} aspect={4 / 5} onUploaded={(url) => set('image_url', url)} />
+        </div>
+        <span className="rk-ui-field-hint">Used on the “Shop by Activity” cards. Cropped to a tall 4:5.</span>
+      </div>
+    </div>
+  )
+
+  const visibleCount = categories.filter((c) => c.is_visible).length
+
   return (
     <div>
       <style>{adminCardStyles}</style>
-      <style>{`
-        .rk-cat-row {
-          display: flex;
-          align-items: center;
-          gap: 0.875rem;
-          border: 1px solid var(--border);
-          border-radius: 0.875rem;
-          padding: 0.75rem 1rem;
-          margin-bottom: 0.625rem;
-        }
-        .rk-cat-thumb {
-          width: 44px;
-          height: 44px;
-          flex-shrink: 0;
-          border-radius: 0.5rem;
-          overflow: hidden;
-          background: var(--placeholder-bg);
-        }
-        .rk-cat-thumb img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .rk-cat-body {
-          flex: 1;
-          min-width: 0;
-        }
-        .rk-cat-label {
-          font-weight: 700;
-          font-size: 0.9375rem;
-          color: var(--text);
-        }
-        .rk-cat-slug {
-          font-size: 0.75rem;
-          color: var(--text-faint);
-        }
-        .rk-cat-edit-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 0.5rem;
-          flex: 1;
-        }
-        .rk-cat-edit-grid input {
-          width: 100%;
-          border: 1px solid var(--border);
-          border-radius: 0.5rem;
-          padding: 0.5rem 0.625rem;
-          font-size: 0.8125rem;
-          background: var(--bg);
-          color: var(--text);
-        }
-      `}</style>
 
-      {error && (
-        <div className="rk-admin-card">
-          <p className="rk-admin-card-desc" style={{ color: 'var(--accent-red)', margin: 0 }}>{error}</p>
-        </div>
-      )}
+      {error && <Notice tone="alert" onDismiss={() => setError(null)}>{error}</Notice>}
 
       <div className="rk-admin-card">
-        <div className="rk-admin-card-head">
-          <div>
-            <h2 className="rk-admin-card-title"><IconTags /> Navigation Categories</h2>
-            <p className="rk-admin-card-desc">
-              Drives the main nav and the "Shop by Activity" cards. Each slug matches a product's category —
-              use <code>new-releases</code> to show items added in the last 30 days instead.
-            </p>
-          </div>
-          <button className="rk-admin-primary-btn" onClick={() => setAdding((a) => !a)}>+ Add Category</button>
-        </div>
+        <SectionHead
+          icon={<IconTags />}
+          title="Menu Categories"
+          desc="The links in the store’s top menu and the “Shop by Activity” cards on the homepage, in this order. Each one shows every product with a matching category."
+          actions={
+            <>
+              {!loading && <Pill tone={visibleCount > 0 ? 'ok' : 'neutral'}>{visibleCount} of {categories.length} showing</Pill>}
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
+                {adding ? 'Close' : '+ Add category'}
+              </button>
+            </>
+          }
+        />
 
         {adding && (
-          <div className="rk-admin-form-panel">
-            <div className="rk-admin-form-grid">
-              <label className="rk-field">
-                <span className="rk-field-label">Label</span>
-                <input placeholder="e.g. Running" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Slug / category value</span>
-                <input placeholder="Optional, auto from label" value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Image</span>
-                <div className="rk-field-upload-row">
-                  {form.image_url && <img className="rk-field-thumb" src={form.image_url} alt="" />}
-                  <ImageUploadButton label={form.image_url ? 'Change Image' : '+ Upload Image'} aspect={4 / 5} onUploaded={(url) => setForm((f) => ({ ...f, image_url: url }))} />
-                </div>
-              </label>
-              <div className="rk-admin-form-actions">
-                <button className="rk-admin-add-btn" onClick={addCategory}>Save Category</button>
-              </div>
+          <div className="rk-cms-add-panel">
+            <p className="rk-cms-panel-title">New category</p>
+            {renderFields(form, (k, val) => setForm((f) => ({ ...f, [k]: val })), true)}
+            <div className="rk-cms-form-actions">
+              {!form.label.trim() && <span className="rk-cms-form-actions-note">Add a name to save this category.</span>}
+              <button type="button" className="rk-ui-btn" onClick={() => { setAdding(false); setForm(emptyForm) }}>Cancel</button>
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addCategory} disabled={!form.label.trim()}>Add category</button>
             </div>
           </div>
         )}
@@ -256,63 +241,86 @@ export default function AdminCategories() {
         {loading ? (
           <p className="rk-admin-empty">Loading…</p>
         ) : categories.length === 0 ? (
-          <p className="rk-admin-empty">No categories yet.</p>
+          <EmptyState
+            title="No categories yet"
+            hint="Categories become the links in the store’s top menu, like “Running” or “Basketball”."
+            action={!adding && <button type="button" className="rk-ui-btn rk-ui-btn-primary" onClick={() => setAdding(true)}>+ Add your first category</button>}
+          />
         ) : (
-          categories.map((c, i) => {
-            const isEditing = editingId === c.id
-            return (
-              <div key={c.id} className="rk-cat-row">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-                  <button className="rk-admin-icon-btn" onClick={() => moveCategory(c.id, -1)} disabled={i === 0} aria-label="Move up"><UpIcon /></button>
-                  <button className="rk-admin-icon-btn" onClick={() => moveCategory(c.id, 1)} disabled={i === categories.length - 1} aria-label="Move down"><DownIcon /></button>
-                </div>
-                <div className="rk-cat-thumb">
-                  {c.image_url ? <img src={c.image_url} alt="" /> : null}
-                </div>
-                {isEditing && draft ? (
-                  <div className="rk-cat-edit-grid">
-                    <label className="rk-field">
-                      <span className="rk-field-label">Label</span>
-                      <input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
-                    </label>
-                    <label className="rk-field">
-                      <span className="rk-field-label">Slug</span>
-                      <input value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} />
-                    </label>
-                    <label className="rk-field" style={{ gridColumn: '1 / -1' }}>
-                      <span className="rk-field-label">Image</span>
-                      <div className="rk-field-upload-row">
-                        {draft.image_url && <img className="rk-field-thumb" src={draft.image_url} alt="" />}
-                        <ImageUploadButton label={draft.image_url ? 'Change Image' : '+ Upload Image'} aspect={4 / 5} onUploaded={(url) => setDraft({ ...draft, image_url: url })} />
+          <div className="rk-ui-list rk-cms-list">
+            {categories.map((c, i) => {
+              const isEditing = editingId === c.id && draft
+              return (
+                <div key={c.id}>
+                  <div className={`rk-ui-list-row ${c.is_visible ? '' : 'rk-cms-row-hidden'}`}>
+                    <MoveButtons
+                      what="category"
+                      onUp={() => moveCategory(c.id, -1)}
+                      onDown={() => moveCategory(c.id, 1)}
+                      upDisabled={i === 0}
+                      downDisabled={i === categories.length - 1}
+                    />
+                    <div className="rk-cms-thumb">{c.image_url ? <img src={c.image_url} alt="" /> : 'No photo'}</div>
+                    <div className="rk-ui-list-main">
+                      <div className="rk-ui-list-title">{c.label || 'Untitled category'}</div>
+                      <div className="rk-ui-list-meta">Page: /category/{c.slug}</div>
+                    </div>
+                    <div className="rk-ui-list-side">
+                      <Pill tone={c.is_visible ? 'ok' : 'neutral'}>{c.is_visible ? 'Showing' : 'Hidden'}</Pill>
+                      <button type="button" className="rk-ui-btn" onClick={() => toggleVisible(c)}>{c.is_visible ? 'Hide' : 'Show'}</button>
+                      {!isEditing && (
+                        <button type="button" className="rk-ui-btn" onClick={() => startEdit(c)}>
+                          <EditIcon /> Edit
+                        </button>
+                      )}
+                      <button type="button" className="rk-ui-btn rk-ui-btn-danger" onClick={() => setConfirmDelete(c)}>
+                        <TrashIcon /> Delete
+                      </button>
+                    </div>
+                  </div>
+                  {isEditing && draft && (
+                    <div className="rk-cms-edit-panel">
+                      <p className="rk-cms-panel-title">Editing category</p>
+                      {renderFields(draft, (k, val) => setDraft({ ...draft, [k]: val }), false)}
+                      <div className="rk-cms-form-actions">
+                        <button type="button" className="rk-ui-btn" onClick={cancelEdit}>Cancel</button>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={saveEdit}>Save category</button>
                       </div>
-                    </label>
-                  </div>
-                ) : (
-                  <div className="rk-cat-body">
-                    <div className="rk-cat-label">{c.label}</div>
-                    <div className="rk-cat-slug">/category/{c.slug}</div>
-                  </div>
-                )}
-                <button
-                  className={`rk-admin-badge ${c.is_visible ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
-                  style={{ border: 'none', cursor: 'pointer' }}
-                  onClick={() => toggleVisible(c)}
-                >
-                  {c.is_visible ? 'Visible' : 'Hidden'}
-                </button>
-                <div className="rk-admin-table-actions">
-                  {isEditing ? (
-                    <button className="rk-admin-icon-btn" onClick={saveEdit} aria-label="Save">✓</button>
-                  ) : (
-                    <button className="rk-admin-icon-btn" onClick={() => startEdit(c)} aria-label="Edit"><EditIcon /></button>
+                    </div>
                   )}
-                  <button className="rk-admin-icon-btn" onClick={() => removeCategory(c.id)} aria-label="Delete"><TrashIcon /></button>
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <Modal
+          title="Delete this category?"
+          subtitle={confirmDelete.label || 'Untitled category'}
+          onClose={() => setConfirmDelete(null)}
+          footer={
+            <>
+              <button type="button" className="rk-ui-btn" onClick={() => setConfirmDelete(null)}>Keep it</button>
+              <button
+                type="button"
+                className="rk-ui-btn rk-ui-btn-danger"
+                onClick={() => {
+                  removeCategory(confirmDelete.id)
+                  setConfirmDelete(null)
+                }}
+              >
+                <TrashIcon /> Yes, delete
+              </button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+            The menu link and card disappear from the store right away. Products in this category are not deleted. To take it off the menu for now, use <b>Hide</b> instead. Deleted by mistake? Click <b>Undo</b> at the top of this page.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }

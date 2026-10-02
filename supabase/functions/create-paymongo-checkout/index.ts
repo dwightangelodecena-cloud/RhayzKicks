@@ -9,6 +9,12 @@
 // item_variants row + current price + current stock itself, and only then
 // creates the order and asks PayMongo for a checkout session.
 //
+// Optional voucherId: must be the caller's own unredeemed voucher and the
+// loyalty program must be on. The discount is applied here (never trusted
+// from the client) and the voucher is only marked redeemed once the order is
+// paid (mark_online_order_paid). If the voucher covers the whole bag, the
+// order is marked paid right away and PayMongo is skipped.
+//
 // Deploy: supabase functions deploy create-paymongo-checkout
 // Secrets needed (supabase secrets set ...): PAYMONGO_SECRET_KEY
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are provided
@@ -26,6 +32,22 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+// PayMongo rejects checkout amounts under ₱20. A voucher that would leave
+// less than this to pay just makes the order free instead.
+const PAYMONGO_MIN_AMOUNT = 20
+
+async function expireCheckoutSession(secretKey: string, sessionId: string) {
+  try {
+    await fetch(`https://api.paymongo.com/v1/checkout_sessions/${sessionId}/expire`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${btoa(secretKey + ':')}` },
+    })
+  } catch {
+    // Best effort — the stale order is cancelled either way, so a late
+    // webhook for it is a no-op in mark_online_order_paid.
+  }
 }
 
 interface CartLineInput {
@@ -68,6 +90,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
     const lines = (body.lines ?? []) as CartLineInput[]
+    const voucherId = typeof body.voucherId === 'string' && body.voucherId ? body.voucherId : null
     if (!Array.isArray(lines) || lines.length === 0) return json({ error: 'Cart is empty.' }, 400)
 
     const resolvedLines: {
@@ -135,9 +158,40 @@ Deno.serve(async (req) => {
 
     const subtotal = resolvedLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0)
 
+    let discount = 0
+    let voucherCode: string | null = null
+    if (voucherId) {
+      const { data: settings } = await adminClient.from('loyalty_settings').select('is_enabled').eq('id', true).maybeSingle()
+      if (settings && !settings.is_enabled) return json({ error: 'Vouchers are paused right now — the loyalty program is turned off.' }, 400)
+
+      const { data: voucher } = await adminClient
+        .from('vouchers')
+        .select('id, code, value, redeemed, customer_id')
+        .eq('id', voucherId)
+        .maybeSingle()
+      if (!voucher || voucher.customer_id !== customer.id) return json({ error: 'That voucher is not on your account.' }, 400)
+      if (voucher.redeemed) return json({ error: 'That voucher has already been used.' }, 400)
+
+      // Release the voucher from any earlier checkout the customer abandoned.
+      const { data: staleOrders } = await adminClient
+        .from('online_orders')
+        .select('id, payment_reference')
+        .eq('voucher_id', voucher.id)
+        .eq('status', 'pending')
+      for (const stale of staleOrders ?? []) {
+        if (stale.payment_reference) await expireCheckoutSession(PAYMONGO_SECRET_KEY, stale.payment_reference)
+        await adminClient.from('online_orders').update({ status: 'cancelled' }).eq('id', stale.id).eq('status', 'pending')
+      }
+
+      discount = Math.min(Number(voucher.value), subtotal)
+      if (subtotal - discount < PAYMONGO_MIN_AMOUNT) discount = subtotal
+      voucherCode = voucher.code
+    }
+    const total = Math.round((subtotal - discount) * 100) / 100
+
     const { data: order, error: orderError } = await adminClient
       .from('online_orders')
-      .insert({ customer_id: customer.id, subtotal, total: subtotal })
+      .insert({ customer_id: customer.id, subtotal, discount, total, voucher_id: voucherId })
       .select('id, order_number')
       .single()
     if (orderError || !order) return json({ error: orderError?.message ?? 'Could not create the order.' }, 500)
@@ -161,6 +215,43 @@ Deno.serve(async (req) => {
     const successUrl = `${origin}/order/success?order_id=${order.id}`
     const cancelUrl = `${origin}/`
 
+    // Voucher covers everything — nothing to charge, so complete it now.
+    if (total <= 0) {
+      const { error: paidError } = await adminClient.rpc('mark_online_order_paid', {
+        p_order_id: order.id,
+        p_payment_reference: voucherCode ? `voucher:${voucherCode}` : 'voucher',
+        p_payment_method: 'voucher',
+      })
+      if (paidError) {
+        await adminClient.from('online_orders').delete().eq('id', order.id)
+        return json({ error: paidError.message }, 500)
+      }
+      return json({ checkoutUrl: successUrl, orderId: order.id, free: true })
+    }
+
+    // PayMongo checkout has no discount field, so with a voucher the charge
+    // goes up as one line for the discounted total, items listed in the
+    // description.
+    const paymongoLineItems =
+      discount > 0
+        ? [
+            {
+              currency: 'PHP',
+              amount: Math.round(total * 100),
+              name: `RhayzKicks order ${order.order_number}`,
+              description:
+                resolvedLines.map((l) => `${l.quantity}× ${l.itemName}`).join(', ') +
+                ` — voucher ${voucherCode} (−₱${discount.toFixed(2)})`,
+              quantity: 1,
+            },
+          ]
+        : resolvedLines.map((l) => ({
+            currency: 'PHP',
+            amount: Math.round(l.unitPrice * 100),
+            name: l.itemName,
+            quantity: l.quantity,
+          }))
+
     const paymongoRes = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
       method: 'POST',
       headers: {
@@ -170,12 +261,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         data: {
           attributes: {
-            line_items: resolvedLines.map((l) => ({
-              currency: 'PHP',
-              amount: Math.round(l.unitPrice * 100),
-              name: l.itemName,
-              quantity: l.quantity,
-            })),
+            line_items: paymongoLineItems,
             payment_method_types: ['gcash', 'card', 'grab_pay'],
             success_url: successUrl,
             cancel_url: cancelUrl,

@@ -9,12 +9,15 @@ import 'state/shop_controller.dart';
 import 'supabase_config.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
+import 'widgets/loyalty_points_popup.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: SupabaseConfig.url, publishableKey: SupabaseConfig.publishableKey);
   runApp(const RhayzKicksApp());
 }
+
+final _navigatorKey = GlobalKey<NavigatorState>();
 
 class RhayzKicksApp extends StatelessWidget {
   const RhayzKicksApp({super.key});
@@ -35,6 +38,8 @@ class RhayzKicksApp extends StatelessWidget {
         builder: (context, controller, _) {
           return MaterialApp(
             title: 'Rhayz Kicks',
+            navigatorKey: _navigatorKey,
+            builder: (context, child) => LoyaltyPointsPopup(navigatorKey: _navigatorKey, child: child!),
             debugShowCheckedModeBanner: false,
             theme: buildTheme(controller.effectiveBrightness),
             home: const HomeScreen(),

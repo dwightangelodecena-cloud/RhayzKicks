@@ -4,18 +4,30 @@ import { adminCardStyles } from './adminCardStyles'
 import { IconLayers } from './adminIcons'
 import ImageUploadButton from './ImageUploadButton'
 import { useUndoLog } from '../../context/useUndoLog'
+import { EmptyState, Modal, Notice, Pill, SectionHead } from './adminUi'
 
 function EditIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
 }
 function TrashIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
 }
 function UpIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
 }
 function DownIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+}
+
+// Up/down arrows with a tooltip + screen-reader label (styled by the
+// .rk-cms-reorder rules in AdminCMS).
+function MoveButtons({ what, onUp, onDown, upDisabled, downDisabled }: { what: string; onUp: () => void; onDown: () => void; upDisabled: boolean; downDisabled: boolean }) {
+  return (
+    <div className="rk-cms-reorder">
+      <button type="button" onClick={onUp} disabled={upDisabled} aria-label={`Move ${what} up`} title={`Move ${what} up (shows earlier)`}><UpIcon /></button>
+      <button type="button" onClick={onDown} disabled={downDisabled} aria-label={`Move ${what} down`} title={`Move ${what} down (shows later)`}><DownIcon /></button>
+    </div>
+  )
 }
 
 interface CollectionRow {
@@ -182,153 +194,127 @@ export default function AdminCollections() {
     load()
   }
 
+  const cancelEdit = () => {
+    setEditingId(null)
+    setDraft(null)
+  }
+
+  // One shared "Are you sure?" dialog for deletes.
+  const [confirmDelete, setConfirmDelete] = useState<CollectionRow | null>(null)
+
+  // Same fields for "add" and "edit"; the slug is only asked for on add
+  // (editing never changed it, so that stays as it was).
+  const renderFields = (
+    v: { tag: string; title: string; description: string; image_url: string; cta_label: string; slug?: string },
+    set: (key: 'tag' | 'title' | 'description' | 'image_url' | 'cta_label' | 'slug', value: string) => void,
+    withSlug: boolean,
+  ) => (
+    <div className="rk-ui-form">
+      <label className="rk-ui-field">
+        <span>Title (required)</span>
+        <input placeholder="e.g. Court Classics" value={v.title} onChange={(e) => set('title', e.target.value)} />
+        <span className="rk-ui-field-hint">The big name on the tile.</span>
+      </label>
+      <label className="rk-ui-field">
+        <span>Small label</span>
+        <input placeholder="e.g. Elevated Essentials" value={v.tag} onChange={(e) => set('tag', e.target.value)} />
+        <span className="rk-ui-field-hint">Optional. Shown in small capitals above the title.</span>
+      </label>
+      <label className="rk-ui-field rk-ui-field-full">
+        <span>Description</span>
+        <textarea rows={2} value={v.description} onChange={(e) => set('description', e.target.value)} />
+        <span className="rk-ui-field-hint">One short sentence about what’s in this collection.</span>
+      </label>
+      <div className="rk-ui-field rk-ui-field-full">
+        <span>Tile photo</span>
+        <div className="rk-cms-upload-row">
+          <div className="rk-cms-thumb">{v.image_url ? <img src={v.image_url} alt="" /> : 'No photo'}</div>
+          <ImageUploadButton label={v.image_url ? 'Change photo' : '+ Upload photo'} aspect={3 / 2} onUploaded={(url) => set('image_url', url)} />
+        </div>
+        <span className="rk-ui-field-hint">Cropped to 3:2.</span>
+      </div>
+      <label className="rk-ui-field">
+        <span>Button text</span>
+        <input placeholder="Shop Now" value={v.cta_label} onChange={(e) => set('cta_label', e.target.value)} />
+      </label>
+      {withSlug && (
+        <label className="rk-ui-field">
+          <span>Short ID (optional)</span>
+          <input placeholder="Made from the title if left blank" value={v.slug ?? ''} onChange={(e) => set('slug', e.target.value)} />
+          <span className="rk-ui-field-hint">Lowercase words joined by dashes, e.g. court-classics.</span>
+        </label>
+      )}
+    </div>
+  )
+
+  const liveCount = collections.filter((c) => c.is_active).length
+  const homeCount = collections.filter((c) => c.is_active && c.show_on_home).length
+
   return (
     <div>
       <style>{adminCardStyles}</style>
       <style>{`
-        .rk-coll-card {
-          border: 1px solid var(--border);
-          border-radius: 0.875rem;
-          padding: 1rem;
-          margin-bottom: 0.75rem;
-          display: flex;
-          gap: 0.875rem;
-        }
-        .rk-coll-thumb {
-          width: 96px;
-          height: 72px;
-          flex-shrink: 0;
-          border-radius: 0.5rem;
-          overflow: hidden;
-          background: var(--placeholder-bg);
-        }
-        .rk-coll-thumb img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .rk-coll-body {
-          flex: 1;
-          min-width: 0;
-        }
-        .rk-coll-tag {
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--text-faint);
-        }
-        .rk-coll-title {
-          font-family: 'Barlow Condensed', sans-serif;
-          font-weight: 900;
-          text-transform: uppercase;
-          font-size: 1.0625rem;
-          color: var(--text);
-          margin: 0.125rem 0;
-        }
-        .rk-coll-desc {
-          font-size: 0.8125rem;
-          color: var(--text-muted);
-        }
-        .rk-coll-edit-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 0.5rem;
-        }
-        .rk-coll-edit-grid input,
-        .rk-coll-edit-grid textarea {
-          width: 100%;
-          border: 1px solid var(--border);
-          border-radius: 0.5rem;
-          padding: 0.5rem 0.625rem;
-          font-size: 0.8125rem;
-          background: var(--bg);
-          color: var(--text);
-        }
-        .rk-coll-edit-full {
-          grid-column: 1 / -1;
-        }
-        .rk-coll-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          align-items: flex-end;
-          flex-shrink: 0;
-        }
-        .rk-size-toggle {
-          display: flex;
+        .rk-cms-coll-size {
+          display: inline-flex;
           border: 1px solid var(--border);
           border-radius: 999px;
           overflow: hidden;
+          background: var(--bg);
         }
-        .rk-size-toggle button {
+        .rk-cms-coll-size button {
           border: none;
           background: none;
-          padding: 0.25rem 0.625rem;
-          font-size: 0.6875rem;
+          padding: 0.45rem 0.75rem;
+          font: inherit;
+          font-size: 0.75rem;
           font-weight: 700;
           color: var(--text-muted);
           cursor: pointer;
         }
-        .rk-size-toggle button.active {
+        .rk-cms-coll-size button:hover { color: var(--text); }
+        .rk-cms-coll-size button[aria-pressed='true'] {
           background: var(--text);
           color: var(--bg);
         }
-        .rk-coll-flags {
+        .rk-cms-coll-controls {
           display: flex;
-          gap: 0.375rem;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.5rem;
+          margin-top: 0.625rem;
+        }
+        .rk-cms-coll-controls-label {
+          font-size: 0.6875rem;
+          font-weight: 700;
+          color: var(--text-faint);
         }
       `}</style>
 
-      {error && (
-        <div className="rk-admin-card">
-          <p className="rk-admin-card-desc" style={{ color: 'var(--accent-red)', margin: 0 }}>{error}</p>
-        </div>
-      )}
+      {error && <Notice tone="alert" onDismiss={() => setError(null)}>{error}</Notice>}
 
       <div className="rk-admin-card">
-        <div className="rk-admin-card-head">
-          <div>
-            <h2 className="rk-admin-card-title"><IconLayers /> Collections</h2>
-            <p className="rk-admin-card-desc">Homepage Featured Collections tiles + the /collections page. Wide tiles get a bigger grid footprint.</p>
-          </div>
-          <button className="rk-admin-primary-btn" onClick={() => setAdding((a) => !a)}>+ Add Collection</button>
-        </div>
+        <SectionHead
+          icon={<IconLayers />}
+          title="Collections"
+          desc="Groups of shoes shown as photo tiles. Every showing collection appears on the Collections page; turn on “Homepage” to also feature it on the homepage. Wide tiles show bigger in the grid."
+          actions={
+            <>
+              {!loading && <Pill tone={liveCount > 0 ? 'ok' : 'neutral'}>{liveCount} showing · {homeCount} on homepage</Pill>}
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
+                {adding ? 'Close' : '+ Add collection'}
+              </button>
+            </>
+          }
+        />
 
         {adding && (
-          <div className="rk-admin-form-panel">
-            <div className="rk-coll-edit-grid">
-              <label className="rk-field">
-                <span className="rk-field-label">Tag</span>
-                <input placeholder="e.g. Elevated Essentials" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Title</span>
-                <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
-              </label>
-              <label className="rk-field rk-coll-edit-full">
-                <span className="rk-field-label">Description</span>
-                <textarea rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-              </label>
-              <label className="rk-field rk-coll-edit-full">
-                <span className="rk-field-label">Image</span>
-                <div className="rk-field-upload-row">
-                  {form.image_url && <img className="rk-field-thumb" src={form.image_url} alt="" />}
-                  <ImageUploadButton label={form.image_url ? 'Change Image' : '+ Upload Image'} aspect={3 / 2} onUploaded={(url) => setForm((f) => ({ ...f, image_url: url }))} />
-                </div>
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Button label</span>
-                <input value={form.cta_label} onChange={(e) => setForm((f) => ({ ...f, cta_label: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Slug</span>
-                <input placeholder="Optional, auto from title" value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} />
-              </label>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-              <button className="rk-admin-add-btn" onClick={addCollection}>Save Collection</button>
+          <div className="rk-cms-add-panel">
+            <p className="rk-cms-panel-title">New collection</p>
+            {renderFields(form, (k, val) => setForm((f) => ({ ...f, [k]: val })), true)}
+            <div className="rk-cms-form-actions">
+              {!form.title.trim() && <span className="rk-cms-form-actions-note">Add a title to save this collection.</span>}
+              <button type="button" className="rk-ui-btn" onClick={() => { setAdding(false); setForm(emptyForm) }}>Cancel</button>
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addCollection} disabled={!form.title.trim()}>Add collection</button>
             </div>
           </div>
         )}
@@ -336,89 +322,104 @@ export default function AdminCollections() {
         {loading ? (
           <p className="rk-admin-empty">Loading…</p>
         ) : collections.length === 0 ? (
-          <p className="rk-admin-empty">No collections yet.</p>
+          <EmptyState
+            title="No collections yet"
+            hint="Collections group shoes into themes like “Running” or “New Season” for shoppers to browse."
+            action={!adding && <button type="button" className="rk-ui-btn rk-ui-btn-primary" onClick={() => setAdding(true)}>+ Add your first collection</button>}
+          />
         ) : (
-          collections.map((c, i) => {
-            const isEditing = editingId === c.id
-            return (
-              <div key={c.id} className="rk-coll-card">
-                <div className="rk-reorder-col" style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-                  <button className="rk-admin-icon-btn" onClick={() => moveCollection(c.id, -1)} disabled={i === 0} aria-label="Move up"><UpIcon /></button>
-                  <button className="rk-admin-icon-btn" onClick={() => moveCollection(c.id, 1)} disabled={i === collections.length - 1} aria-label="Move down"><DownIcon /></button>
-                </div>
-                <div className="rk-coll-thumb">
-                  {c.image_url ? <img src={c.image_url} alt="" /> : null}
-                </div>
-                {isEditing && draft ? (
-                  <div className="rk-coll-body">
-                    <div className="rk-coll-edit-grid">
-                      <label className="rk-field">
-                        <span className="rk-field-label">Tag</span>
-                        <input value={draft.tag} onChange={(e) => setDraft({ ...draft, tag: e.target.value })} />
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Title</span>
-                        <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-                      </label>
-                      <label className="rk-field rk-coll-edit-full">
-                        <span className="rk-field-label">Description</span>
-                        <textarea rows={2} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-                      </label>
-                      <label className="rk-field rk-coll-edit-full">
-                        <span className="rk-field-label">Image</span>
-                        <div className="rk-field-upload-row">
-                          {draft.image_url && <img className="rk-field-thumb" src={draft.image_url} alt="" />}
-                          <ImageUploadButton label={draft.image_url ? 'Change Image' : '+ Upload Image'} aspect={3 / 2} onUploaded={(url) => setDraft({ ...draft, image_url: url })} />
+          <div className="rk-ui-list rk-cms-list">
+            {collections.map((c, i) => {
+              const isEditing = editingId === c.id && draft
+              return (
+                <div key={c.id}>
+                  <div className={`rk-ui-list-row ${c.is_active ? '' : 'rk-cms-row-hidden'}`}>
+                    <MoveButtons
+                      what="collection"
+                      onUp={() => moveCollection(c.id, -1)}
+                      onDown={() => moveCollection(c.id, 1)}
+                      upDisabled={i === 0}
+                      downDisabled={i === collections.length - 1}
+                    />
+                    <div className="rk-cms-thumb rk-cms-thumb-wide">{c.image_url ? <img src={c.image_url} alt="" /> : 'No photo'}</div>
+                    <div className="rk-ui-list-main">
+                      {c.tag && <div className="rk-cms-eyebrow" style={{ color: 'var(--text-faint)' }}>{c.tag}</div>}
+                      <div className="rk-ui-list-title">{c.title || 'Untitled collection'}</div>
+                      {c.description && <div className="rk-ui-list-meta">{c.description}</div>}
+                      <div className="rk-cms-coll-controls">
+                        <span className="rk-cms-coll-controls-label">Tile size</span>
+                        <div className="rk-cms-coll-size" role="group" aria-label="Tile size">
+                          <button type="button" aria-pressed={c.size === 'regular'} onClick={() => setSize(c, 'regular')} title="Normal tile">Regular</button>
+                          <button type="button" aria-pressed={c.size === 'wide'} onClick={() => setSize(c, 'wide')} title="Bigger tile">Wide</button>
                         </div>
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Button label</span>
-                        <input value={draft.cta_label} onChange={(e) => setDraft({ ...draft, cta_label: e.target.value })} />
-                      </label>
+                        <span className="rk-cms-coll-controls-label">Homepage</span>
+                        <button
+                          type="button"
+                          className="rk-ui-btn"
+                          onClick={() => toggleField(c, 'show_on_home')}
+                          aria-pressed={c.show_on_home}
+                          title={c.show_on_home ? 'Remove from the homepage (stays on the Collections page)' : 'Also feature on the homepage'}
+                        >
+                          {c.show_on_home ? '✓ Featured on homepage' : 'Not on homepage'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rk-ui-list-side">
+                      <Pill tone={c.is_active ? 'ok' : 'neutral'}>{c.is_active ? 'Showing' : 'Hidden'}</Pill>
+                      <button type="button" className="rk-ui-btn" onClick={() => toggleField(c, 'is_active')}>{c.is_active ? 'Hide' : 'Show'}</button>
+                      {!isEditing && (
+                        <button type="button" className="rk-ui-btn" onClick={() => startEdit(c)}>
+                          <EditIcon /> Edit
+                        </button>
+                      )}
+                      <button type="button" className="rk-ui-btn rk-ui-btn-danger" onClick={() => setConfirmDelete(c)}>
+                        <TrashIcon /> Delete
+                      </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="rk-coll-body">
-                    <div className="rk-coll-tag">{c.tag || '—'}</div>
-                    <div className="rk-coll-title">{c.title}</div>
-                    <div className="rk-coll-desc">{c.description}</div>
-                  </div>
-                )}
-                <div className="rk-coll-actions">
-                  <div className="rk-size-toggle">
-                    <button className={c.size === 'regular' ? 'active' : ''} onClick={() => setSize(c, 'regular')}>Regular</button>
-                    <button className={c.size === 'wide' ? 'active' : ''} onClick={() => setSize(c, 'wide')}>Wide</button>
-                  </div>
-                  <div className="rk-coll-flags">
-                    <button
-                      className={`rk-admin-badge ${c.show_on_home ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
-                      style={{ border: 'none', cursor: 'pointer' }}
-                      onClick={() => toggleField(c, 'show_on_home')}
-                    >
-                      {c.show_on_home ? 'On Home' : 'Home Off'}
-                    </button>
-                    <button
-                      className={`rk-admin-badge ${c.is_active ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
-                      style={{ border: 'none', cursor: 'pointer' }}
-                      onClick={() => toggleField(c, 'is_active')}
-                    >
-                      {c.is_active ? 'Live' : 'Hidden'}
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    {isEditing ? (
-                      <button className="rk-admin-icon-btn" onClick={saveEdit} aria-label="Save">✓</button>
-                    ) : (
-                      <button className="rk-admin-icon-btn" onClick={() => startEdit(c)} aria-label="Edit"><EditIcon /></button>
-                    )}
-                    <button className="rk-admin-icon-btn" onClick={() => removeCollection(c.id)} aria-label="Delete"><TrashIcon /></button>
-                  </div>
+                  {isEditing && draft && (
+                    <div className="rk-cms-edit-panel">
+                      <p className="rk-cms-panel-title">Editing collection</p>
+                      {renderFields(draft, (k, val) => setDraft({ ...draft, [k]: val }), false)}
+                      <div className="rk-cms-form-actions">
+                        <button type="button" className="rk-ui-btn" onClick={cancelEdit}>Cancel</button>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={saveEdit}>Save collection</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <Modal
+          title="Delete this collection?"
+          subtitle={confirmDelete.title || 'Untitled collection'}
+          onClose={() => setConfirmDelete(null)}
+          footer={
+            <>
+              <button type="button" className="rk-ui-btn" onClick={() => setConfirmDelete(null)}>Keep it</button>
+              <button
+                type="button"
+                className="rk-ui-btn rk-ui-btn-danger"
+                onClick={() => {
+                  removeCollection(confirmDelete.id)
+                  setConfirmDelete(null)
+                }}
+              >
+                <TrashIcon /> Yes, delete
+              </button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+            The tile disappears from the store right away. To take it off the store for now, use <b>Hide</b> instead. Deleted by mistake? Click <b>Undo</b> at the top of this page.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }

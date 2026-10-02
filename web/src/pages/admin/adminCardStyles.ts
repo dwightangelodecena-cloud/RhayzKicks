@@ -1,3 +1,5 @@
+import { adminUiStyles } from './adminUi'
+
 // Shared inline <style> block for admin CMS cards/tables/buttons, imported as a
 // template string so each admin tab doesn't repeat the same CSS.
 export const adminCardStyles = `
@@ -222,6 +224,9 @@ export const adminCardStyles = `
     background: rgba(250, 178, 25, 0.16);
     color: #8a5a00;
   }
+  [data-theme='dark'] .rk-admin-badge-warn {
+    color: #f5b400;
+  }
   .rk-admin-badge-off {
     background: var(--bg-secondary);
     color: var(--text-faint);
@@ -307,4 +312,5 @@ export const adminCardStyles = `
     flex-shrink: 0;
     background: var(--placeholder-bg);
   }
+${adminUiStyles}
 `

@@ -227,6 +227,26 @@ export default function Header() {
         .rk-utility-sep {
           color: var(--chip-border);
         }
+        /* Phones: keep Help / Join Us / Sign In on one line. */
+        @media (max-width: 30rem) {
+          .rk-utility-inner {
+            padding: 0.4rem 0.75rem;
+            gap: 0.5rem;
+          }
+          .rk-utility-brand-text {
+            font-size: 9px;
+            letter-spacing: 0.12em;
+          }
+          .rk-utility-links {
+            gap: 0;
+            flex-shrink: 0;
+          }
+          .rk-utility-links a,
+          .rk-utility-links button {
+            white-space: nowrap;
+            padding: 0.25rem 0.45rem;
+          }
+        }
         .rk-main-nav {
           background: var(--bg);
           border-bottom: 1px solid var(--border);

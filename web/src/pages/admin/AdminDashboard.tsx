@@ -6,11 +6,10 @@ import { supabase } from '../../supabase'
 import AdminOverview from './AdminOverview'
 import AdminCMS from './AdminCMS'
 import AdminVendors from './AdminVendors'
-import AdminStaffHours from './AdminStaffHours'
 import AdminSalesPOS from './AdminSalesPOS'
 import AdminInventory from './AdminInventory'
 import AdminOnlineOrders from './AdminOnlineOrders'
-import AdminStaff from './AdminStaff'
+import AdminTeam from './AdminTeam'
 import AdminLoyalty from './AdminLoyalty'
 import StaffMyHours from './StaffMyHours'
 import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, IconPackageCheck, IconStore, IconTruck, IconUsers, IconWallet } from './adminIcons'
@@ -23,8 +22,7 @@ const tabs = [
   { label: 'Delivery', icon: IconPackageCheck, blurb: 'Track packing, pickup & delivery for online orders', roles: ['admin', 'staff'] },
   { label: 'Content', icon: IconLayers, blurb: 'Banners, collections, categories & products — everything on the storefront', roles: ['admin'] },
   { label: 'Vendors', icon: IconTruck, blurb: 'Suppliers & purchase orders', roles: ['admin'] },
-  { label: 'Staff', icon: IconUsers, blurb: 'Staff roster & roles', roles: ['admin'] },
-  { label: 'Staff Hours', icon: IconClock, blurb: 'Shift log & hours worked', roles: ['admin'] },
+  { label: 'Staff', icon: IconUsers, blurb: 'Team members, roles & hours worked', roles: ['admin'] },
   { label: 'My Hours', icon: IconClock, blurb: 'Clock in / clock out', roles: ['staff'] },
   { label: 'Loyalty', icon: IconMedal, blurb: 'Redemption options & issued vouchers', roles: ['admin'] },
 ] as const
@@ -36,7 +34,29 @@ export default function AdminDashboard() {
   const visibleTabs = tabs.filter((t) => (t.roles as readonly StaffRole[]).includes(role ?? 'staff'))
   const [tab, setTab] = useState<TabLabel>(visibleTabs[0]?.label ?? 'Sales')
   const [adminEmail, setAdminEmail] = useState<string | null>(null)
+  // Phone/tablet: the sidebar becomes a slide-in menu opened from the top bar.
+  const [menuOpen, setMenuOpen] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [menuOpen])
+
+  const goTo = (label: TabLabel) => {
+    setTab(label)
+    setMenuOpen(false)
+    window.scrollTo(0, 0)
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setAdminEmail(data.user?.email ?? null))
@@ -53,7 +73,8 @@ export default function AdminDashboard() {
   const initials = (adminEmail ?? 'A').slice(0, 1).toUpperCase()
 
   return (
-    <div className="rk-admin-shell">
+    <div className={`rk-admin-shell ${menuOpen ? 'rk-admin-shell-menu-open' : ''}`}>
+      <div className="rk-admin-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
       <style>{`
         .rk-admin-shell {
           min-height: 100vh;
@@ -265,47 +286,130 @@ export default function AdminDashboard() {
         }
 
         /* ---------------------------------------------------------------- */
-        /* Mobile fallback — sidebar becomes a horizontal top nav            */
+        /* Phone & tablet — sidebar becomes a slide-in menu (☰ in top bar)   */
         /* ---------------------------------------------------------------- */
+        .rk-admin-menu-btn,
+        .rk-admin-backdrop,
+        .rk-admin-sidebar-close {
+          display: none;
+        }
         @media (max-width: 61rem) {
           .rk-admin-shell {
             flex-direction: column;
           }
           .rk-admin-sidebar {
-            width: 100%;
-            height: auto;
-            position: static;
-            flex-direction: row;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            height: 100dvh;
+            width: min(18rem, 86vw);
+            z-index: 250;
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+            box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35);
+            padding-bottom: env(safe-area-inset-bottom);
+          }
+          .rk-admin-shell-menu-open .rk-admin-sidebar {
+            transform: translateX(0);
+          }
+          .rk-admin-backdrop {
+            display: block;
+            position: fixed;
+            inset: 0;
+            z-index: 240;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+          }
+          .rk-admin-shell-menu-open .rk-admin-backdrop {
+            opacity: 1;
+            pointer-events: auto;
+          }
+          .rk-admin-sidebar-close {
+            display: flex;
+            margin-left: auto;
             align-items: center;
-            padding-right: 0.75rem;
-          }
-          .rk-admin-sidebar-brand {
-            padding: 0.75rem 1rem;
-          }
-          .rk-admin-nav {
-            flex-direction: row;
-            overflow-x: auto;
-            padding: 0.5rem;
-          }
-          .rk-admin-nav-item span.rk-admin-nav-blurb {
-            display: none;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
           }
           .rk-admin-nav-item {
-            white-space: nowrap;
-          }
-          .rk-admin-sidebar-footer {
-            border-top: none;
-            flex-direction: row;
-            padding: 0.5rem;
-          }
-          .rk-admin-profile {
-            display: none;
-          }
-          .rk-admin-content {
-            padding: 1.25rem 1rem 2.5rem;
+            padding: 0.8rem 0.875rem;
+            font-size: 0.9375rem;
           }
           .rk-admin-header {
-            padding: 1rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            padding-top: max(0.75rem, env(safe-area-inset-top));
+          }
+          .rk-admin-menu-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 2.75rem;
+            height: 2.75rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text);
+            cursor: pointer;
+          }
+          .rk-admin-header-text {
+            min-width: 0;
+          }
+          .rk-admin-header-title {
+            font-size: 1.25rem;
+          }
+          .rk-admin-header-blurb {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .rk-admin-content {
+            padding: 1rem 0.875rem 2.5rem;
+          }
+          /* Tighter cards on small screens so content gets the width. */
+          .rk-admin-content .rk-admin-card {
+            padding: 1.125rem 1rem;
+            margin-bottom: 1rem;
+          }
+        }
+        @media (max-width: 30rem) {
+          .rk-admin-content {
+            padding: 0.75rem 0.625rem 2rem;
+          }
+          .rk-admin-content .rk-admin-card {
+            padding: 1rem 0.875rem;
+            border-radius: 0.875rem;
+          }
+          .rk-admin-content .rk-ui-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+          }
+          .rk-admin-content .rk-ui-stat {
+            padding: 0.75rem;
+          }
+          .rk-admin-content .rk-ui-stat-value {
+            font-size: 1.5rem;
+          }
+          .rk-admin-content .rk-ui-seg {
+            max-width: 100%;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+          }
+          .rk-admin-content .rk-ui-search {
+            min-width: 0;
+            flex-basis: 100%;
           }
         }
       `}</style>
@@ -317,6 +421,9 @@ export default function AdminDashboard() {
             <div className="rk-admin-wordmark">RHAYZ<span>.</span></div>
             <div className="rk-admin-brand-sub">Admin Console</div>
           </div>
+          <button type="button" className="rk-admin-sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
         </div>
 
         <nav className="rk-admin-nav">
@@ -327,7 +434,7 @@ export default function AdminDashboard() {
               <button
                 key={t.label}
                 className={`rk-admin-nav-item ${isActive ? 'rk-admin-nav-item-active' : ''}`}
-                onClick={() => setTab(t.label)}
+                onClick={() => goTo(t.label)}
               >
                 <Icon />
                 {t.label}
@@ -361,8 +468,13 @@ export default function AdminDashboard() {
 
       <div className="rk-admin-main">
         <header className="rk-admin-header">
-          <h1 className="rk-admin-header-title">{activeTab?.label}</h1>
-          <div className="rk-admin-header-blurb">{activeTab?.blurb}</div>
+          <button type="button" className="rk-admin-menu-btn" onClick={() => setMenuOpen(true)} aria-label="Open menu" aria-expanded={menuOpen}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
+          </button>
+          <div className="rk-admin-header-text">
+            <h1 className="rk-admin-header-title">{activeTab?.label}</h1>
+            <div className="rk-admin-header-blurb">{activeTab?.blurb}</div>
+          </div>
         </header>
         <div className="rk-admin-content rk-animate-fade-in" key={tab}>
           {tab === 'Overview' && <AdminOverview />}
@@ -371,8 +483,7 @@ export default function AdminDashboard() {
           {tab === 'Delivery' && <AdminOnlineOrders />}
           {tab === 'Content' && <AdminCMS />}
           {tab === 'Vendors' && <AdminVendors />}
-          {tab === 'Staff' && <AdminStaff />}
-          {tab === 'Staff Hours' && <AdminStaffHours />}
+          {tab === 'Staff' && <AdminTeam />}
           {tab === 'My Hours' && <StaffMyHours />}
           {tab === 'Loyalty' && <AdminLoyalty />}
         </div>

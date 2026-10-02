@@ -18,6 +18,13 @@
       "runtimeExecutable": "powershell",
       "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "Rhayzkicks Mobile/run_web.ps1"],
       "port": 8090
+    },
+    {
+      "name": "web-phone",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "web", "exec", "--", "vite", "preview", "web", "--host", "0.0.0.0", "--port", "4173", "--strictPort"],
+      "port": 4173,
+      "autoPort": false
     }
   ]
 }

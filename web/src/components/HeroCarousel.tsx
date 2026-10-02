@@ -157,6 +157,30 @@ export default function HeroCarousel() {
           width: 24px;
           background: #ffffff;
         }
+        /* Phones: arrows move to the bottom-left corner so they don't sit on
+           the headline/buttons, or under the video ad (bottom-right). */
+        @media (max-width: 767px) {
+          .rk-hero-arrow {
+            top: auto;
+            bottom: 1rem;
+            transform: none;
+            width: 34px;
+            height: 34px;
+          }
+          .rk-hero-arrow:hover {
+            transform: scale(1.08);
+          }
+          .rk-hero-arrow-left {
+            left: 1rem;
+          }
+          .rk-hero-arrow-right {
+            left: 3.5rem;
+            right: auto;
+          }
+          .rk-hero-content {
+            padding: 0 1.25rem 4.25rem;
+          }
+        }
         @media (min-width: 768px) {
           .rk-hero-content {
             padding: 0 5rem 4rem;

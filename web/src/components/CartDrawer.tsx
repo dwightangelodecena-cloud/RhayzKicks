@@ -8,6 +8,22 @@ import { useAuth } from '../context/AuthContext'
 import { formatPeso } from '../data/catalog'
 import { refundCancellationPolicy } from '../data/policies'
 import { supabase } from '../supabase'
+import { fetchLoyaltySettings } from '../lib/loyaltySettings'
+
+interface VoucherOption {
+  id: string
+  code: string
+  value: number
+}
+
+// Mirrors the server-side rule in create-paymongo-checkout: anything under
+// PayMongo's ₱20 minimum left to pay makes the order free.
+const PAYMONGO_MIN_AMOUNT = 20
+function discountFor(voucher: VoucherOption | undefined, subtotal: number) {
+  if (!voucher) return 0
+  const discount = Math.min(voucher.value, subtotal)
+  return subtotal - discount < PAYMONGO_MIN_AMOUNT ? subtotal : discount
+}
 
 function BagIcon() {
   return (
@@ -21,12 +37,39 @@ function BagIcon() {
 
 export default function CartDrawer() {
   const { isCartOpen, closeDrawers, cart, setQty, removeFromCart, cartSubtotal } = useShop()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, customer } = useAuth()
   const navigate = useNavigate()
   const [checkingOut, setCheckingOut] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [agreedToPolicy, setAgreedToPolicy] = useState(false)
   const [showPolicyModal, setShowPolicyModal] = useState(false)
+  const [vouchers, setVouchers] = useState<VoucherOption[]>([])
+  const [voucherId, setVoucherId] = useState('')
+
+  // The customer's unused vouchers, refreshed each time the bag opens so one
+  // redeemed a moment ago on the Rewards tab shows up. Hidden entirely while
+  // the loyalty program is turned off.
+  const customerId = customer?.id ?? null
+  useEffect(() => {
+    if (!isCartOpen || !customerId) return
+    let cancelled = false
+    Promise.all([
+      fetchLoyaltySettings(),
+      supabase.from('vouchers').select('id, code, value').eq('customer_id', customerId).eq('redeemed', false).order('value', { ascending: false }),
+    ]).then(([settings, { data }]) => {
+      if (cancelled) return
+      const list = settings.isEnabled ? (data ?? []).map((v) => ({ ...v, value: Number(v.value) })) : []
+      setVouchers(list as VoucherOption[])
+      setVoucherId((current) => (list.some((v) => v.id === current) ? current : ''))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isCartOpen, customerId])
+
+  const selectedVoucher = vouchers.find((v) => v.id === voucherId)
+  const discount = discountFor(selectedVoucher, cartSubtotal)
+  const total = cartSubtotal - discount
 
   useEffect(() => {
     if (!showPolicyModal) return
@@ -58,6 +101,7 @@ export default function CartDrawer() {
     const { data, error } = await supabase.functions.invoke('create-paymongo-checkout', {
       body: {
         lines: cart.map((l) => ({ itemId: l.product.id, size: l.size ?? '', color: l.colorway ?? '', quantity: l.qty })),
+        voucherId: selectedVoucher?.id ?? null,
       },
       headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
     })
@@ -76,6 +120,14 @@ export default function CartDrawer() {
     if (data?.error) {
       setCheckoutError(data.error)
       setCheckingOut(false)
+      return
+    }
+    if (data.free) {
+      // Voucher covered the whole bag — the order is already paid, no PayMongo.
+      closeDrawers()
+      setCheckingOut(false)
+      setVoucherId('')
+      navigate(`/order/success?order_id=${data.orderId}`)
       return
     }
     window.location.href = data.checkoutUrl
@@ -224,6 +276,41 @@ export default function CartDrawer() {
                 padding: 1.25rem 1.5rem;
                 border-top: 1px solid var(--border);
               }
+              .rk-cart-voucher {
+                display: flex;
+                flex-direction: column;
+                gap: 0.35rem;
+              }
+              .rk-cart-voucher-label {
+                font-size: 0.6875rem;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-muted);
+              }
+              .rk-cart-voucher select {
+                width: 100%;
+                padding: 0.65rem 0.75rem;
+                border-radius: 0.5rem;
+                border: 1px solid var(--border);
+                background: var(--bg);
+                color: var(--text);
+                font-size: 0.875rem;
+              }
+              .rk-cart-discount-row {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.875rem;
+                color: #0ca30c;
+                font-weight: 700;
+              }
+              .rk-cart-total-row {
+                display: flex;
+                justify-content: space-between;
+                font-weight: 900;
+                font-size: 1rem;
+                color: var(--text);
+              }
               .rk-policy-modal-agree {
                 width: 100%;
                 background: var(--text);
@@ -242,6 +329,29 @@ export default function CartDrawer() {
               <span>Subtotal</span>
               <span>{formatPeso(cartSubtotal)}</span>
             </div>
+            {vouchers.length > 0 && (
+              <label className="rk-cart-voucher">
+                <span className="rk-cart-voucher-label">Use a voucher</span>
+                <select value={voucherId} onChange={(e) => setVoucherId(e.target.value)} disabled={checkingOut}>
+                  <option value="">Don't use a voucher</option>
+                  {vouchers.map((v) => (
+                    <option key={v.id} value={v.id}>{v.code} — {formatPeso(v.value)} off</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {discount > 0 && (
+              <>
+                <div className="rk-cart-discount-row">
+                  <span>Voucher {selectedVoucher?.code}</span>
+                  <span>−{formatPeso(discount)}</span>
+                </div>
+                <div className="rk-cart-total-row">
+                  <span>Total</span>
+                  <span>{formatPeso(total)}</span>
+                </div>
+              </>
+            )}
             <label className="rk-cart-agree">
               <input
                 type="checkbox"
@@ -265,7 +375,7 @@ export default function CartDrawer() {
               </span>
             </label>
             <button className="rk-cart-checkout" onClick={checkout} disabled={checkingOut || !agreedToPolicy}>
-              {checkingOut ? 'Redirecting to payment…' : 'Checkout'}
+              {checkingOut ? (total <= 0 ? 'Placing order…' : 'Redirecting to payment…') : total <= 0 ? 'Place Order (Free)' : 'Checkout'}
             </button>
             {checkoutError ? (
               <p className="rk-cart-error">{checkoutError}</p>

@@ -116,33 +116,38 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Keyed on the id, not the customer object — AuthContext swaps in a fresh
+  // object whenever the row changes (e.g. loyalty points landing), and that
+  // shouldn't refetch the bag or resubscribe.
+  const activeCustomerId = customer?.id ?? null
+
   useEffect(() => {
-    if (!customer) {
+    if (!activeCustomerId) {
       setCart([])
       setWishlist([])
       return
     }
-    refreshCart(customer.id)
-    refreshWishlist(customer.id)
+    refreshCart(activeCustomerId)
+    refreshWishlist(activeCustomerId)
 
     const channel = supabase
-      .channel(`shop-${customer.id}`)
+      .channel(`shop-${activeCustomerId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'cart_items', filter: `customer_id=eq.${customer.id}` },
-        () => refreshCart(customer.id),
+        { event: '*', schema: 'public', table: 'cart_items', filter: `customer_id=eq.${activeCustomerId}` },
+        () => refreshCart(activeCustomerId),
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'wishlist_items', filter: `customer_id=eq.${customer.id}` },
-        () => refreshWishlist(customer.id),
+        { event: '*', schema: 'public', table: 'wishlist_items', filter: `customer_id=eq.${activeCustomerId}` },
+        () => refreshWishlist(activeCustomerId),
       )
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [customer, refreshCart, refreshWishlist])
+  }, [activeCustomerId, refreshCart, refreshWishlist])
 
   const addToCart = (variantId: string) => {
     if (!customer) return

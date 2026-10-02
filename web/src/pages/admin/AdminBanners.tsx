@@ -4,19 +4,46 @@ import { adminCardStyles } from './adminCardStyles'
 import { IconLayers, IconMegaphone } from './adminIcons'
 import ImageUploadButton from './ImageUploadButton'
 import { useUndoLog } from '../../context/useUndoLog'
+import { EmptyState, Modal, Notice, Pill, SectionHead } from './adminUi'
 
 function EditIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
 }
 function TrashIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
 }
 function UpIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
 }
 function DownIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
 }
+
+// Up/down arrows with a tooltip + screen-reader label (styled by the
+// .rk-cms-reorder rules in AdminCMS).
+function MoveButtons({ what, onUp, onDown, upDisabled, downDisabled }: { what: string; onUp: () => void; onDown: () => void; upDisabled: boolean; downDisabled: boolean }) {
+  return (
+    <div className="rk-cms-reorder">
+      <button type="button" onClick={onUp} disabled={upDisabled} aria-label={`Move ${what} up`} title={`Move ${what} up (shows earlier)`}><UpIcon /></button>
+      <button type="button" onClick={onDown} disabled={downDisabled} aria-label={`Move ${what} down`} title={`Move ${what} down (shows later)`}><DownIcon /></button>
+    </div>
+  )
+}
+
+// Shape shared by the new-slide form, a slide draft and the promo draft, so
+// one field layout can render all three.
+interface BannerFieldValues {
+  eyebrow?: string
+  label?: string
+  headline: string
+  subtext: string
+  image_url: string | null
+  primary_cta_label: string
+  primary_cta_link: string
+  secondary_cta_label: string | null
+  secondary_cta_link: string | null
+}
+type BannerFieldKey = keyof BannerFieldValues
 
 interface AnnouncementRow {
   id: string
@@ -346,220 +373,221 @@ export default function AdminBanners() {
     load()
   }
 
+  const toggleAnnouncementActive = async (a: AnnouncementRow) => {
+    const { error: updateError } = await supabase.from('announcements').update({ is_active: !a.is_active }).eq('id', a.id)
+    if (updateError) return setError(updateError.message)
+    record(a.is_active ? 'Hide announcement' : 'Show announcement', async () => {
+      await supabase.from('announcements').update({ is_active: a.is_active }).eq('id', a.id)
+    })
+    load()
+  }
+
+  const cancelEditSlide = () => {
+    setEditingSlide(null)
+    setSlideDraft(null)
+  }
+
+  const cancelEditPromo = () => {
+    setEditingPromo(false)
+    setPromoDraft(null)
+  }
+
+  // One shared "Are you sure?" dialog for every delete on this page.
+  const [confirmDelete, setConfirmDelete] = useState<{ what: string; name: string; onConfirm: () => void } | null>(null)
+
+  // The same field layout is used for adding a slide, editing a slide and
+  // editing the promo banner — only the small top line differs.
+  const renderBannerFields = (
+    v: BannerFieldValues,
+    set: (key: BannerFieldKey, value: string) => void,
+    kind: 'slide' | 'promo',
+  ) => {
+    const topKey = kind === 'slide' ? 'eyebrow' : 'label'
+    const topValue = (kind === 'slide' ? v.eyebrow : v.label) ?? ''
+    return (
+      <div className="rk-ui-form">
+        <label className="rk-ui-field">
+          <span>Small text above the headline</span>
+          <input placeholder={kind === 'slide' ? 'e.g. New Drop' : 'e.g. Members only'} value={topValue} onChange={(e) => set(topKey, e.target.value)} />
+          <span className="rk-ui-field-hint">Optional. Shown in small red capitals.</span>
+        </label>
+        <label className="rk-ui-field">
+          <span>Headline{kind === 'slide' ? ' (required)' : ''}</span>
+          <input placeholder="e.g. Fresh pairs just landed" value={v.headline} onChange={(e) => set('headline', e.target.value)} />
+          <span className="rk-ui-field-hint">The big bold line shoppers read first.</span>
+        </label>
+        <label className="rk-ui-field rk-ui-field-full">
+          <span>Supporting text</span>
+          <textarea rows={2} value={v.subtext} onChange={(e) => set('subtext', e.target.value)} />
+          <span className="rk-ui-field-hint">One or two short sentences under the headline.</span>
+        </label>
+        <div className="rk-ui-field rk-ui-field-full">
+          <span>Background photo</span>
+          <div className="rk-cms-upload-row">
+            <div className="rk-cms-thumb">{v.image_url ? <img src={v.image_url} alt="" /> : 'No photo'}</div>
+            <ImageUploadButton
+              label={v.image_url ? 'Change photo' : '+ Upload photo'}
+              aspect={kind === 'slide' ? 16 / 9 : 12 / 5}
+              onUploaded={(url) => set('image_url', url)}
+            />
+          </div>
+          <span className="rk-ui-field-hint">{kind === 'slide' ? 'Wide photo, cropped to 16:9.' : 'Very wide photo, cropped to 12:5.'}</span>
+        </div>
+        <label className="rk-ui-field">
+          <span>Main button text</span>
+          <input placeholder="e.g. Shop Now" value={v.primary_cta_label} onChange={(e) => set('primary_cta_label', e.target.value)} />
+        </label>
+        <label className="rk-ui-field">
+          <span>Main button goes to</span>
+          <input placeholder="e.g. /collections" value={v.primary_cta_link} onChange={(e) => set('primary_cta_link', e.target.value)} />
+          <span className="rk-ui-field-hint">A page on your store, like /collections or /category/running.</span>
+        </label>
+        <label className="rk-ui-field">
+          <span>Second button text (optional)</span>
+          <input value={v.secondary_cta_label ?? ''} onChange={(e) => set('secondary_cta_label', e.target.value)} />
+        </label>
+        <label className="rk-ui-field">
+          <span>Second button goes to (optional)</span>
+          <input value={v.secondary_cta_link ?? ''} onChange={(e) => set('secondary_cta_link', e.target.value)} />
+          <span className="rk-ui-field-hint">Leave both blank to show only one button.</span>
+        </label>
+      </div>
+    )
+  }
+
+  const renderButtonChips = (b: { primary_cta_label: string; primary_cta_link: string; secondary_cta_label: string | null; secondary_cta_link: string | null }) => (
+    <div className="rk-cms-chips">
+      {b.primary_cta_label && <span className="rk-cms-chip" title={`Goes to ${b.primary_cta_link}`}>Button: {b.primary_cta_label} → {b.primary_cta_link}</span>}
+      {b.secondary_cta_label && <span className="rk-cms-chip" title={`Goes to ${b.secondary_cta_link ?? ''}`}>Button: {b.secondary_cta_label} → {b.secondary_cta_link}</span>}
+    </div>
+  )
+
+  const liveAnnouncements = announcements.filter((a) => a.is_active).length
+  const liveSlides = slides.filter((s) => s.is_active).length
+
   return (
     <div>
       <style>{adminCardStyles}</style>
-      <style>{`
-        .rk-reorder-col {
-          display: flex;
-          flex-direction: column;
-          gap: 0.125rem;
-        }
-        .rk-reorder-btn {
-          width: 22px;
-          height: 18px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: none;
-          background: none;
-          color: var(--text-faint);
-          cursor: pointer;
-          border-radius: 0.25rem;
-        }
-        .rk-reorder-btn:hover:not(:disabled) {
-          color: var(--text);
-          background: var(--bg);
-        }
-        .rk-reorder-btn:disabled {
-          opacity: 0.25;
-          cursor: not-allowed;
-        }
-        .rk-slide-card {
-          border: 1px solid var(--border);
-          border-radius: 0.875rem;
-          padding: 1rem;
-          margin-bottom: 0.75rem;
-          display: flex;
-          gap: 0.875rem;
-        }
-        .rk-slide-thumb {
-          width: 96px;
-          height: 64px;
-          flex-shrink: 0;
-          border-radius: 0.5rem;
-          overflow: hidden;
-          background: var(--placeholder-bg);
-        }
-        .rk-slide-thumb img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .rk-slide-body {
-          flex: 1;
-          min-width: 0;
-        }
-        .rk-slide-eyebrow {
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--accent-red);
-        }
-        .rk-slide-headline {
-          font-family: 'Barlow Condensed', sans-serif;
-          font-weight: 900;
-          text-transform: uppercase;
-          font-size: 1.0625rem;
-          color: var(--text);
-          margin: 0.125rem 0;
-        }
-        .rk-slide-subtext {
-          font-size: 0.8125rem;
-          color: var(--text-muted);
-        }
-        .rk-slide-ctas {
-          display: flex;
-          gap: 0.5rem;
-          margin-top: 0.5rem;
-        }
-        .rk-slide-cta-chip {
-          font-size: 0.6875rem;
-          font-weight: 700;
-          padding: 0.25rem 0.625rem;
-          border-radius: 999px;
-          background: var(--bg-secondary);
-          color: var(--text-muted);
-        }
-        .rk-slide-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 0.375rem;
-          align-items: flex-end;
-        }
-        .rk-slide-edit-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 0.5rem;
-        }
-        .rk-slide-edit-grid input,
-        .rk-slide-edit-grid textarea {
-          width: 100%;
-          border: 1px solid var(--border);
-          border-radius: 0.5rem;
-          padding: 0.5rem 0.625rem;
-          font-size: 0.8125rem;
-          background: var(--bg);
-          color: var(--text);
-        }
-        .rk-slide-edit-full {
-          grid-column: 1 / -1;
-        }
-      `}</style>
 
-      {error && (
-        <div className="rk-admin-card">
-          <p className="rk-admin-card-desc" style={{ color: 'var(--accent-red)', margin: 0 }}>{error}</p>
-        </div>
-      )}
+      {error && <Notice tone="alert" onDismiss={() => setError(null)}>{error}</Notice>}
 
+      {/* ---------------- Announcement bar ---------------- */}
       <div className="rk-admin-card">
-        <h2 className="rk-admin-card-title"><IconMegaphone /> Announcement Bar</h2>
-        <p className="rk-admin-card-desc">Rotating messages shown at the top of the store.</p>
+        <SectionHead
+          icon={<IconMegaphone />}
+          title="Announcement Bar"
+          desc="Short messages that rotate in the thin strip at the very top of every page — e.g. “Free shipping over ₱3,000”."
+          actions={!loading && <Pill tone={liveAnnouncements > 0 ? 'ok' : 'neutral'}>{liveAnnouncements} of {announcements.length} showing</Pill>}
+        />
         {loading ? (
           <p className="rk-admin-empty">Loading…</p>
         ) : announcements.length === 0 ? (
-          <p className="rk-admin-empty">No announcements yet.</p>
+          <EmptyState title="No announcements yet" hint="Type a message below and click “Add message” — it shows up at the top of the store straight away." />
         ) : (
-          announcements.map((a, i) => (
-            <div key={a.id} className="rk-admin-row">
-              <div className="rk-reorder-col">
-                <button className="rk-reorder-btn" onClick={() => moveAnnouncement(a.id, -1)} disabled={i === 0} aria-label="Move up"><UpIcon /></button>
-                <button className="rk-reorder-btn" onClick={() => moveAnnouncement(a.id, 1)} disabled={i === announcements.length - 1} aria-label="Move down"><DownIcon /></button>
-              </div>
-              {editingAnnouncement === a.id ? (
-                <input type="text" value={announcementDraft} onChange={(e) => setAnnouncementDraft(e.target.value)} autoFocus onKeyDown={(e) => e.key === 'Enter' && saveAnnouncement(a.id)} />
-              ) : (
-                <span>{a.message}</span>
-              )}
-              {editingAnnouncement === a.id ? (
-                <button className="rk-admin-icon-btn" onClick={() => saveAnnouncement(a.id)} aria-label="Save">✓</button>
-              ) : (
-                <button className="rk-admin-icon-btn" onClick={() => { setEditingAnnouncement(a.id); setAnnouncementDraft(a.message) }} aria-label="Edit">
-                  <EditIcon />
-                </button>
-              )}
-              <button className="rk-admin-icon-btn" onClick={() => removeAnnouncement(a.id)} aria-label="Delete">
-                <TrashIcon />
-              </button>
-            </div>
-          ))
+          <div className="rk-ui-list rk-cms-list">
+            {announcements.map((a, i) => {
+              const isEditing = editingAnnouncement === a.id
+              return (
+                <div key={a.id} className={`rk-ui-list-row ${a.is_active ? '' : 'rk-cms-row-hidden'}`}>
+                  <MoveButtons
+                    what="message"
+                    onUp={() => moveAnnouncement(a.id, -1)}
+                    onDown={() => moveAnnouncement(a.id, 1)}
+                    upDisabled={i === 0}
+                    downDisabled={i === announcements.length - 1}
+                  />
+                  <div className="rk-ui-list-main">
+                    {isEditing ? (
+                      <input
+                        className="rk-cms-inline-input"
+                        type="text"
+                        value={announcementDraft}
+                        onChange={(e) => setAnnouncementDraft(e.target.value)}
+                        autoFocus
+                        aria-label="Announcement text"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveAnnouncement(a.id)
+                          if (e.key === 'Escape') setEditingAnnouncement(null)
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <div className="rk-ui-list-title">{a.message}</div>
+                        <div className="rk-ui-list-meta">Message {i + 1} of {announcements.length}</div>
+                      </>
+                    )}
+                  </div>
+                  <div className="rk-ui-list-side">
+                    {isEditing ? (
+                      <>
+                        <button type="button" className="rk-ui-btn" onClick={() => setEditingAnnouncement(null)}>Cancel</button>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-primary" onClick={() => saveAnnouncement(a.id)}>Save</button>
+                      </>
+                    ) : (
+                      <>
+                        <Pill tone={a.is_active ? 'ok' : 'neutral'}>{a.is_active ? 'Showing' : 'Hidden'}</Pill>
+                        <button type="button" className="rk-ui-btn" onClick={() => toggleAnnouncementActive(a)}>{a.is_active ? 'Hide' : 'Show'}</button>
+                        <button type="button" className="rk-ui-btn" onClick={() => { setEditingAnnouncement(a.id); setAnnouncementDraft(a.message) }}>
+                          <EditIcon /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="rk-ui-btn rk-ui-btn-danger"
+                          onClick={() => setConfirmDelete({ what: 'announcement', name: a.message, onConfirm: () => removeAnnouncement(a.id) })}
+                        >
+                          <TrashIcon /> Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
-        <div className="rk-admin-add-row">
+        <div className="rk-cms-add-row">
           <input
-            className="rk-admin-add-input"
+            className="rk-cms-inline-input"
             type="text"
-            placeholder="New announcement text..."
+            placeholder="New message, e.g. Free shipping on orders over ₱3,000"
+            aria-label="New announcement text"
             value={newAnnouncement}
             onChange={(e) => setNewAnnouncement(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addAnnouncement()}
           />
-          <button className="rk-admin-add-btn" onClick={addAnnouncement}>Add</button>
+          <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addAnnouncement} disabled={!newAnnouncement.trim()}>+ Add message</button>
         </div>
       </div>
 
+      {/* ---------------- Hero carousel ---------------- */}
       <div className="rk-admin-card">
-        <div className="rk-admin-card-head">
-          <div>
-            <h2 className="rk-admin-card-title"><IconLayers /> Hero Carousel</h2>
-            <p className="rk-admin-card-desc">Edit the rotating hero banners on the homepage.</p>
-          </div>
-          <button className="rk-admin-primary-btn" onClick={() => setAddingSlide((a) => !a)}>+ Add Slide</button>
-        </div>
+        <SectionHead
+          icon={<IconLayers />}
+          title="Homepage Slideshow"
+          desc="The large rotating banners at the top of the homepage. Slides play in the order shown here; hidden slides are skipped."
+          actions={
+            <>
+              {!loading && <Pill tone={liveSlides > 0 ? 'ok' : 'warn'}>{liveSlides} of {slides.length} showing</Pill>}
+              <button
+                type="button"
+                className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg"
+                onClick={() => setAddingSlide((a) => !a)}
+                aria-expanded={addingSlide}
+              >
+                {addingSlide ? 'Close' : '+ Add slide'}
+              </button>
+            </>
+          }
+        />
 
         {addingSlide && (
-          <div className="rk-admin-form-panel">
-            <div className="rk-slide-edit-grid">
-              <label className="rk-field">
-                <span className="rk-field-label">Eyebrow</span>
-                <input placeholder="e.g. New Drop" value={slideForm.eyebrow} onChange={(e) => setSlideForm((f) => ({ ...f, eyebrow: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Headline</span>
-                <input value={slideForm.headline} onChange={(e) => setSlideForm((f) => ({ ...f, headline: e.target.value }))} />
-              </label>
-              <label className="rk-field rk-slide-edit-full">
-                <span className="rk-field-label">Subtext</span>
-                <textarea rows={2} value={slideForm.subtext} onChange={(e) => setSlideForm((f) => ({ ...f, subtext: e.target.value }))} />
-              </label>
-              <label className="rk-field rk-slide-edit-full">
-                <span className="rk-field-label">Image</span>
-                <div className="rk-field-upload-row">
-                  {slideForm.image_url && <img className="rk-field-thumb" src={slideForm.image_url} alt="" />}
-                  <ImageUploadButton label={slideForm.image_url ? 'Change Image' : '+ Upload Image'} aspect={16 / 9} onUploaded={(url) => setSlideForm((f) => ({ ...f, image_url: url }))} />
-                </div>
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Primary button label</span>
-                <input value={slideForm.primary_cta_label} onChange={(e) => setSlideForm((f) => ({ ...f, primary_cta_label: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Primary button link</span>
-                <input value={slideForm.primary_cta_link} onChange={(e) => setSlideForm((f) => ({ ...f, primary_cta_link: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Secondary button label (optional)</span>
-                <input value={slideForm.secondary_cta_label} onChange={(e) => setSlideForm((f) => ({ ...f, secondary_cta_label: e.target.value }))} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Secondary button link (optional)</span>
-                <input value={slideForm.secondary_cta_link} onChange={(e) => setSlideForm((f) => ({ ...f, secondary_cta_link: e.target.value }))} />
-              </label>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-              <button className="rk-admin-add-btn" onClick={addSlide}>Save Slide</button>
+          <div className="rk-cms-add-panel">
+            <p className="rk-cms-panel-title">New slide</p>
+            {renderBannerFields(slideForm, (k, val) => setSlideForm((f) => ({ ...f, [k]: val })), 'slide')}
+            <div className="rk-cms-form-actions">
+              {!slideForm.headline.trim() && <span className="rk-cms-form-actions-note">Add a headline to save this slide.</span>}
+              <button type="button" className="rk-ui-btn" onClick={() => { setAddingSlide(false); setSlideForm(emptySlideForm) }}>Cancel</button>
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addSlide} disabled={!slideForm.headline.trim()}>Add slide</button>
             </div>
           </div>
         )}
@@ -567,178 +595,141 @@ export default function AdminBanners() {
         {loading ? (
           <p className="rk-admin-empty">Loading…</p>
         ) : slides.length === 0 ? (
-          <p className="rk-admin-empty">No hero slides yet.</p>
+          <EmptyState
+            title="No slides yet"
+            hint="The homepage needs at least one slide to show a banner at the top."
+            action={!addingSlide && <button type="button" className="rk-ui-btn rk-ui-btn-primary" onClick={() => setAddingSlide(true)}>+ Add your first slide</button>}
+          />
         ) : (
-          slides.map((s, i) => {
-            const isEditing = editingSlide === s.id
-            return (
-              <div key={s.id} className="rk-slide-card">
-                <div className="rk-reorder-col">
-                  <button className="rk-reorder-btn" onClick={() => moveSlide(s.id, -1)} disabled={i === 0} aria-label="Move up"><UpIcon /></button>
-                  <button className="rk-reorder-btn" onClick={() => moveSlide(s.id, 1)} disabled={i === slides.length - 1} aria-label="Move down"><DownIcon /></button>
-                </div>
-                <div className="rk-slide-thumb">
-                  {s.image_url ? <img src={s.image_url} alt="" /> : null}
-                </div>
-                {isEditing && slideDraft ? (
-                  <div className="rk-slide-body">
-                    <div className="rk-slide-edit-grid">
-                      <label className="rk-field">
-                        <span className="rk-field-label">Eyebrow</span>
-                        <input value={slideDraft.eyebrow} onChange={(e) => setSlideDraft({ ...slideDraft, eyebrow: e.target.value })} />
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Headline</span>
-                        <input value={slideDraft.headline} onChange={(e) => setSlideDraft({ ...slideDraft, headline: e.target.value })} />
-                      </label>
-                      <label className="rk-field rk-slide-edit-full">
-                        <span className="rk-field-label">Subtext</span>
-                        <textarea rows={2} value={slideDraft.subtext} onChange={(e) => setSlideDraft({ ...slideDraft, subtext: e.target.value })} />
-                      </label>
-                      <label className="rk-field rk-slide-edit-full">
-                        <span className="rk-field-label">Image</span>
-                        <div className="rk-field-upload-row">
-                          {slideDraft.image_url && <img className="rk-field-thumb" src={slideDraft.image_url} alt="" />}
-                          <ImageUploadButton label={slideDraft.image_url ? 'Change Image' : '+ Upload Image'} aspect={16 / 9} onUploaded={(url) => setSlideDraft({ ...slideDraft, image_url: url })} />
-                        </div>
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Primary button label</span>
-                        <input value={slideDraft.primary_cta_label} onChange={(e) => setSlideDraft({ ...slideDraft, primary_cta_label: e.target.value })} />
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Primary button link</span>
-                        <input value={slideDraft.primary_cta_link} onChange={(e) => setSlideDraft({ ...slideDraft, primary_cta_link: e.target.value })} />
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Secondary button label</span>
-                        <input value={slideDraft.secondary_cta_label ?? ''} onChange={(e) => setSlideDraft({ ...slideDraft, secondary_cta_label: e.target.value })} />
-                      </label>
-                      <label className="rk-field">
-                        <span className="rk-field-label">Secondary button link</span>
-                        <input value={slideDraft.secondary_cta_link ?? ''} onChange={(e) => setSlideDraft({ ...slideDraft, secondary_cta_link: e.target.value })} />
-                      </label>
+          <div className="rk-ui-list rk-cms-list">
+            {slides.map((s, i) => {
+              const isEditing = editingSlide === s.id && slideDraft
+              return (
+                <div key={s.id}>
+                  <div className={`rk-ui-list-row ${s.is_active ? '' : 'rk-cms-row-hidden'}`}>
+                    <MoveButtons
+                      what="slide"
+                      onUp={() => moveSlide(s.id, -1)}
+                      onDown={() => moveSlide(s.id, 1)}
+                      upDisabled={i === 0}
+                      downDisabled={i === slides.length - 1}
+                    />
+                    <div className="rk-cms-thumb rk-cms-thumb-wide">{s.image_url ? <img src={s.image_url} alt="" /> : 'No photo'}</div>
+                    <div className="rk-ui-list-main">
+                      {s.eyebrow && <div className="rk-cms-eyebrow">{s.eyebrow}</div>}
+                      <div className="rk-ui-list-title">{s.headline || 'Untitled slide'}</div>
+                      {s.subtext && <div className="rk-ui-list-meta">{s.subtext}</div>}
+                      {renderButtonChips(s)}
+                    </div>
+                    <div className="rk-ui-list-side">
+                      <Pill tone={s.is_active ? 'ok' : 'neutral'}>{s.is_active ? 'Showing' : 'Hidden'}</Pill>
+                      <button type="button" className="rk-ui-btn" onClick={() => toggleSlideActive(s)}>{s.is_active ? 'Hide' : 'Show'}</button>
+                      {!isEditing && (
+                        <button type="button" className="rk-ui-btn" onClick={() => startEditSlide(s)}>
+                          <EditIcon /> Edit
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="rk-ui-btn rk-ui-btn-danger"
+                        onClick={() => setConfirmDelete({ what: 'slide', name: s.headline || 'Untitled slide', onConfirm: () => removeSlide(s.id) })}
+                      >
+                        <TrashIcon /> Delete
+                      </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="rk-slide-body">
-                    <div className="rk-slide-eyebrow">{s.eyebrow || '—'}</div>
-                    <div className="rk-slide-headline">{s.headline}</div>
-                    <div className="rk-slide-subtext">{s.subtext}</div>
-                    <div className="rk-slide-ctas">
-                      {s.primary_cta_label && <span className="rk-slide-cta-chip">{s.primary_cta_label}</span>}
-                      {s.secondary_cta_label && <span className="rk-slide-cta-chip">{s.secondary_cta_label}</span>}
+                  {isEditing && slideDraft && (
+                    <div className="rk-cms-edit-panel">
+                      <p className="rk-cms-panel-title">Editing slide</p>
+                      {renderBannerFields(slideDraft, (k, val) => setSlideDraft({ ...slideDraft, [k]: val }), 'slide')}
+                      <div className="rk-cms-form-actions">
+                        <button type="button" className="rk-ui-btn" onClick={cancelEditSlide}>Cancel</button>
+                        <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={saveSlide}>Save slide</button>
+                      </div>
                     </div>
-                  </div>
-                )}
-                <div className="rk-slide-actions">
-                  <button
-                    className={`rk-admin-badge ${s.is_active ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
-                    style={{ border: 'none', cursor: 'pointer' }}
-                    onClick={() => toggleSlideActive(s)}
-                  >
-                    {s.is_active ? 'Live' : 'Hidden'}
-                  </button>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    {isEditing ? (
-                      <button className="rk-admin-icon-btn" onClick={saveSlide} aria-label="Save">✓</button>
-                    ) : (
-                      <button className="rk-admin-icon-btn" onClick={() => startEditSlide(s)} aria-label="Edit"><EditIcon /></button>
-                    )}
-                    <button className="rk-admin-icon-btn" onClick={() => removeSlide(s.id)} aria-label="Delete"><TrashIcon /></button>
-                  </div>
+                  )}
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </div>
 
+      {/* ---------------- Promo banner ---------------- */}
       <div className="rk-admin-card">
-        <div className="rk-admin-card-head">
-          <div>
-            <h2 className="rk-admin-card-title"><IconMegaphone /> Promotional Banner</h2>
-            <p className="rk-admin-card-desc">The membership promo banner shown between sections on the homepage.</p>
-          </div>
-          {promoBanner && (
-            <button
-              className={`rk-admin-badge ${promoBanner.is_active ? 'rk-admin-badge-ok' : 'rk-admin-badge-off'}`}
-              style={{ border: 'none', cursor: 'pointer' }}
-              onClick={togglePromoActive}
-            >
-              {promoBanner.is_active ? 'Live' : 'Hidden'}
-            </button>
-          )}
-        </div>
+        <SectionHead
+          icon={<IconMegaphone />}
+          title="Promo Banner"
+          desc="One wide membership/promo banner shown between sections on the homepage."
+          actions={
+            promoBanner && (
+              <>
+                <Pill tone={promoBanner.is_active ? 'ok' : 'neutral'}>{promoBanner.is_active ? 'Showing' : 'Hidden'}</Pill>
+                <button type="button" className="rk-ui-btn" onClick={togglePromoActive}>{promoBanner.is_active ? 'Hide banner' : 'Show banner'}</button>
+              </>
+            )
+          }
+        />
 
         {loading ? (
           <p className="rk-admin-empty">Loading…</p>
         ) : !promoBanner ? (
-          <p className="rk-admin-empty">Promo banner settings not found.</p>
+          <EmptyState title="Promo banner isn’t set up" hint="The promo banner settings row is missing from the database, so there’s nothing to edit here yet." />
         ) : editingPromo && promoDraft ? (
-          <div className="rk-admin-form-panel">
-            <div className="rk-slide-edit-grid">
-              <label className="rk-field">
-                <span className="rk-field-label">Label</span>
-                <input value={promoDraft.label} onChange={(e) => setPromoDraft({ ...promoDraft, label: e.target.value })} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Headline</span>
-                <input value={promoDraft.headline} onChange={(e) => setPromoDraft({ ...promoDraft, headline: e.target.value })} />
-              </label>
-              <label className="rk-field rk-slide-edit-full">
-                <span className="rk-field-label">Subtext</span>
-                <textarea rows={2} value={promoDraft.subtext} onChange={(e) => setPromoDraft({ ...promoDraft, subtext: e.target.value })} />
-              </label>
-              <label className="rk-field rk-slide-edit-full">
-                <span className="rk-field-label">Background image</span>
-                <div className="rk-field-upload-row">
-                  {promoDraft.image_url && <img className="rk-field-thumb" src={promoDraft.image_url} alt="" />}
-                  <ImageUploadButton label={promoDraft.image_url ? 'Change Image' : '+ Upload Image'} aspect={12 / 5} onUploaded={(url) => setPromoDraft({ ...promoDraft, image_url: url })} />
-                </div>
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Primary button label</span>
-                <input value={promoDraft.primary_cta_label} onChange={(e) => setPromoDraft({ ...promoDraft, primary_cta_label: e.target.value })} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Primary button link</span>
-                <input value={promoDraft.primary_cta_link} onChange={(e) => setPromoDraft({ ...promoDraft, primary_cta_link: e.target.value })} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Secondary button label (optional)</span>
-                <input value={promoDraft.secondary_cta_label ?? ''} onChange={(e) => setPromoDraft({ ...promoDraft, secondary_cta_label: e.target.value })} />
-              </label>
-              <label className="rk-field">
-                <span className="rk-field-label">Secondary button link (optional)</span>
-                <input value={promoDraft.secondary_cta_link ?? ''} onChange={(e) => setPromoDraft({ ...promoDraft, secondary_cta_link: e.target.value })} />
-              </label>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button className="rk-admin-icon-btn" onClick={() => { setEditingPromo(false); setPromoDraft(null) }} aria-label="Cancel">✕</button>
-              <button className="rk-admin-add-btn" onClick={savePromo}>Save Banner</button>
+          <div className="rk-cms-add-panel">
+            <p className="rk-cms-panel-title">Editing promo banner</p>
+            {renderBannerFields(promoDraft, (k, val) => setPromoDraft({ ...promoDraft, [k]: val }), 'promo')}
+            <div className="rk-cms-form-actions">
+              <button type="button" className="rk-ui-btn" onClick={cancelEditPromo}>Cancel</button>
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={savePromo}>Save banner</button>
             </div>
           </div>
         ) : (
-          <div className="rk-slide-card">
-            <div className="rk-slide-thumb">
-              {promoBanner.image_url ? <img src={promoBanner.image_url} alt="" /> : null}
-            </div>
-            <div className="rk-slide-body">
-              <div className="rk-slide-eyebrow">{promoBanner.label}</div>
-              <div className="rk-slide-headline">{promoBanner.headline}</div>
-              <div className="rk-slide-subtext">{promoBanner.subtext}</div>
-              <div className="rk-slide-ctas">
-                {promoBanner.primary_cta_label && <span className="rk-slide-cta-chip">{promoBanner.primary_cta_label}</span>}
-                {promoBanner.secondary_cta_label && <span className="rk-slide-cta-chip">{promoBanner.secondary_cta_label}</span>}
+          <div className="rk-ui-list rk-cms-list">
+            <div className={`rk-ui-list-row ${promoBanner.is_active ? '' : 'rk-cms-row-hidden'}`}>
+              <div className="rk-cms-thumb rk-cms-thumb-wide">{promoBanner.image_url ? <img src={promoBanner.image_url} alt="" /> : 'No photo'}</div>
+              <div className="rk-ui-list-main">
+                {promoBanner.label && <div className="rk-cms-eyebrow">{promoBanner.label}</div>}
+                <div className="rk-ui-list-title">{promoBanner.headline || 'No headline'}</div>
+                {promoBanner.subtext && <div className="rk-ui-list-meta">{promoBanner.subtext}</div>}
+                {renderButtonChips(promoBanner)}
               </div>
-            </div>
-            <div className="rk-slide-actions">
-              <button className="rk-admin-icon-btn" onClick={startEditPromo} aria-label="Edit"><EditIcon /></button>
+              <div className="rk-ui-list-side">
+                <button type="button" className="rk-ui-btn" onClick={startEditPromo}>
+                  <EditIcon /> Edit banner
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <Modal
+          title={`Delete this ${confirmDelete.what}?`}
+          subtitle={confirmDelete.name}
+          onClose={() => setConfirmDelete(null)}
+          footer={
+            <>
+              <button type="button" className="rk-ui-btn" onClick={() => setConfirmDelete(null)}>Keep it</button>
+              <button
+                type="button"
+                className="rk-ui-btn rk-ui-btn-danger"
+                onClick={() => {
+                  confirmDelete.onConfirm()
+                  setConfirmDelete(null)
+                }}
+              >
+                <TrashIcon /> Yes, delete
+              </button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+            It disappears from the store right away. If you only want to take it off the store for now, use <b>Hide</b> instead. Deleted by mistake? Click <b>Undo</b> at the top of this page.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }

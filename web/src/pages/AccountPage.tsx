@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import PageHero from '../components/PageHero'
 import DeliveryStepper from '../components/DeliveryStepper'
+import RewardsPanel from '../components/RewardsPanel'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
 import type { DeliveryStage } from '../data/deliveryStages'
@@ -52,7 +53,15 @@ const accountTabs: { key: AccountTab; label: string }[] = [
 export default function AccountPage() {
   const { checkingSession, isAuthenticated, user, customer, refreshCustomer } = useAuth()
 
-  const [activeTab, setActiveTab] = useState<AccountTab>('profile')
+  // ?tab=orders / ?tab=rewards (footer links) opens straight to that tab.
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState<AccountTab>(
+    accountTabs.some((t) => t.key === tabParam) ? (tabParam as AccountTab) : 'profile',
+  )
+  useEffect(() => {
+    if (accountTabs.some((t) => t.key === tabParam)) setActiveTab(tabParam as AccountTab)
+  }, [tabParam])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [expandedOrderKey, setExpandedOrderKey] = useState<string | null>(null)
@@ -108,7 +117,7 @@ export default function AccountPage() {
   }, [customer])
 
   if (checkingSession) return null
-  if (!isAuthenticated) return <Navigate to="/signin" state={{ from: '/account' }} replace />
+  if (!isAuthenticated) return <Navigate to="/signin" state={{ from: `/account${tabParam ? `?tab=${tabParam}` : ''}` }} replace />
 
   const saveProfile = async () => {
     if (!customer) return
@@ -568,6 +577,7 @@ export default function AccountPage() {
               <span className="rk-account-loyalty-label">Total Purchases</span>
             </div>
           </div>
+          <RewardsPanel />
         </div>
       )}
 

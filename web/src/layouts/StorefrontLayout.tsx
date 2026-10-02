@@ -4,6 +4,8 @@ import Footer from '../components/Footer'
 import ThemeToggle from '../components/ThemeToggle'
 import WishlistDrawer from '../components/WishlistDrawer'
 import CartDrawer from '../components/CartDrawer'
+import VideoAdPopup from '../components/VideoAdPopup'
+import LoyaltyPointsPopup from '../components/LoyaltyPointsPopup'
 
 export default function StorefrontLayout() {
   return (
@@ -16,6 +18,8 @@ export default function StorefrontLayout() {
       <ThemeToggle />
       <WishlistDrawer />
       <CartDrawer />
+      <VideoAdPopup />
+      <LoyaltyPointsPopup />
     </>
   )
 }

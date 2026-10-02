@@ -8,6 +8,7 @@ import '../state/auth_controller.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/page_hero.dart';
+import '../widgets/rewards_panel.dart';
 import 'orders_screen.dart';
 
 // Mirrors web's AccountPage.tsx: profile info, address, rewards, theme
@@ -210,6 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ],
                                 ),
+                                const RewardsPanel(),
                               ],
                             ),
                           if (_activeTab == 'security') ...[

@@ -212,7 +212,7 @@ export default function HelpPage() {
           })}
         </div>
 
-        <div className="rk-help-contact">
+        <div className="rk-help-contact" id="contact">
           <h2 className="rk-help-contact-title rk-heading">Still Need Help?</h2>
           <p className="rk-help-contact-sub">Our support team is available 7 days a week, 9AM–9PM PHT.</p>
           <div className="rk-help-contact-cards">
