@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 import { useShop } from '../context/ShopContext'
 import { useAuth } from '../context/AuthContext'
 import { formatPeso } from '../data/catalog'
+import { Part2AdModal } from '../components/Part2Ad'
 
 interface OrderRow {
   id: string
@@ -75,6 +76,35 @@ export default function OrderSuccessPage() {
   }, [orderId, clearCart, refreshCustomer])
 
   const confirmed = order?.status === 'paid' || order?.status === 'fulfilled'
+
+  // Part 2 of the ad pops up once per order after payment is confirmed. It
+  // waits for the loyalty-points popup (which can land a moment later over
+  // Realtime) to be closed, so the two never stack.
+  const [showPart2, setShowPart2] = useState(false)
+  useEffect(() => {
+    if (!confirmed || !order) return
+    const key = `rk-part2-shown-${order.id}`
+    try {
+      if (localStorage.getItem(key)) return
+    } catch {
+      /* storage blocked — still show it */
+    }
+    let elapsed = 0
+    const timer = window.setInterval(() => {
+      elapsed += 500
+      const loyaltyOpen = !!document.querySelector('.rk-loyalty-pop-backdrop')
+      if (elapsed >= 2500 && !loyaltyOpen) {
+        window.clearInterval(timer)
+        setShowPart2(true)
+        try {
+          localStorage.setItem(key, '1')
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 500)
+    return () => window.clearInterval(timer)
+  }, [confirmed, order])
 
   return (
     <div>
@@ -152,6 +182,7 @@ export default function OrderSuccessPage() {
             </p>
           </>
         )}
+        {showPart2 && <Part2AdModal onClose={() => setShowPart2(false)} />}
         <Link to="/" className="rk-order-success-link">← Back to Shopping</Link>
       </div>
     </div>

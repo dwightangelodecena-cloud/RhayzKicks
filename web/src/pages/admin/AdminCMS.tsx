@@ -598,6 +598,68 @@ function AdminCMSInner() {
           color: var(--text-muted);
           margin: 0.25rem 0 0.875rem;
         }
+        /* Products → multi-category picker */
+        .rk-cms-cat-picker {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.4rem;
+          margin-bottom: 0.375rem;
+        }
+        .rk-cms-cat-chip {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          background: var(--bg);
+          overflow: hidden;
+        }
+        .rk-cms-cat-chip > button:first-child {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.375rem;
+          border: none;
+          background: transparent;
+          color: var(--text-muted);
+          font: inherit;
+          font-size: 0.8125rem;
+          font-weight: 700;
+          padding: 0.45rem 0.8rem;
+          cursor: pointer;
+        }
+        .rk-cms-cat-check {
+          width: 1rem;
+          text-align: center;
+          font-weight: 900;
+        }
+        .rk-cms-cat-chip-on {
+          border-color: var(--text);
+          background: var(--text);
+        }
+        .rk-cms-cat-chip-on > button:first-child {
+          color: var(--bg);
+        }
+        .rk-cms-cat-main,
+        .rk-cms-cat-make-main {
+          font-size: 0.625rem;
+          font-weight: 900;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          padding: 0.2rem 0.5rem;
+          margin-right: 0.35rem;
+          border-radius: 999px;
+          white-space: nowrap;
+        }
+        .rk-cms-cat-main {
+          background: var(--accent-red);
+          color: #fff;
+        }
+        .rk-cms-cat-make-main {
+          border: 1px solid rgba(127, 127, 127, 0.5);
+          background: transparent;
+          color: var(--bg);
+          font-family: inherit;
+          cursor: pointer;
+        }
         /* Products → Sizes & stock, grouped by colorway */
         .rk-cms-stock-color + .rk-cms-stock-color {
           margin-top: 1rem;

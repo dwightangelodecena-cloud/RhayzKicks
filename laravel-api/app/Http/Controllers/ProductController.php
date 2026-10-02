@@ -26,10 +26,15 @@ class ProductController extends Controller
     {
         $query = Item::query()->where('is_active', true);
 
+        // A product can be in several categories (items.categories, 025_*.sql);
+        // keep in step with web's storeData.getProductsForCategorySlug.
         if ($slug === 'new-releases') {
-            $query->where('created_at', '>=', now()->subDays(30));
+            $query->where(function ($q) {
+                $q->where('created_at', '>=', now()->subDays(30))
+                    ->orWhereRaw("'new-releases' = any(categories)");
+            });
         } else {
-            $query->where('category', $slug);
+            $query->whereRaw('? = any(categories)', [$slug]);
         }
 
         return response()->json($query->orderBy('sort_order')->get(self::COLUMNS));

@@ -119,7 +119,7 @@ export default function CategoryPage() {
         }
         .rk-category-grid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 1.5rem 1rem;
         }
         .rk-category-empty {
@@ -129,12 +129,12 @@ export default function CategoryPage() {
         }
         @media (min-width: 640px) {
           .rk-category-grid {
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
         }
         @media (min-width: 1024px) {
           .rk-category-grid {
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
           }
           .rk-category-body {
             padding: 2rem 3rem 4rem;

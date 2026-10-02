@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import PageHero from '../components/PageHero'
 import DeliveryStepper from '../components/DeliveryStepper'
 import RewardsPanel from '../components/RewardsPanel'
+import { Part2AdCard } from '../components/Part2Ad'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
 import type { DeliveryStage } from '../data/deliveryStages'
@@ -578,6 +579,8 @@ export default function AccountPage() {
             </div>
           </div>
           <RewardsPanel />
+          {/* Unlocked by any purchase — total_purchases counts paid online orders and in-store sales. */}
+          <Part2AdCard unlocked={(customer?.totalPurchases ?? 0) > 0} />
         </div>
       )}
 

@@ -277,7 +277,7 @@ export default function ProductDetailPage() {
         }
         .rk-pdp-sizes {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 0.5rem;
           margin-bottom: 0.5rem;
         }
@@ -404,7 +404,7 @@ export default function ProductDetailPage() {
         }
         .rk-pdp-recs-grid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 1.5rem 1rem;
         }
         @media (min-width: 768px) {
@@ -420,7 +420,7 @@ export default function ProductDetailPage() {
             gap: 3rem;
           }
           .rk-pdp-recs-grid {
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
           }
         }
       `}</style>

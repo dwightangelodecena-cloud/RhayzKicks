@@ -118,10 +118,12 @@ export async function getActiveProducts(): Promise<Product[]> {
 
 export async function getProductsForCategorySlug(slug: string): Promise<Product[]> {
   let query = supabase.from('items').select(ITEM_COLUMNS).eq('is_active', true)
+  // A product can be in several categories (items.categories, 025_*.sql).
+  // New Releases = added in the last 30 days, or tagged New Releases by an admin.
   if (slug === 'new-releases') {
-    query = query.gte('created_at', new Date(Date.now() - NEW_WINDOW_MS).toISOString())
+    query = query.or(`created_at.gte.${new Date(Date.now() - NEW_WINDOW_MS).toISOString()},categories.cs.{new-releases}`)
   } else {
-    query = query.eq('category', slug)
+    query = query.contains('categories', [slug])
   }
   const { data, error } = await query.order('sort_order', { ascending: true })
   if (error) throw error

@@ -11,12 +11,15 @@ interface ImgSlotProps {
 // once an admin has set one via the CMS (pass `src`).
 export default function ImgSlot({ label, size, dark, aspect, className, src }: ImgSlotProps) {
   if (src) {
+    // Sizing is inline, not in the <style> block below: that block only
+    // mounts when a placeholder renders, so on a page where every product has
+    // a photo the img would otherwise fall back to its natural (huge) size.
     return (
       <img
         src={src}
         alt={label}
         className={`img-slot-photo ${className ?? ''}`}
-        style={aspect ? { aspectRatio: aspect } : undefined}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', ...(aspect ? { aspectRatio: aspect } : {}) }}
       />
     )
   }

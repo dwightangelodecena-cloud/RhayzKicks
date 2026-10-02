@@ -75,7 +75,7 @@ export default function CollectionsPage() {
         }
         @media (min-width: 768px) {
           .rk-collections-grid {
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
         }
       `}</style>

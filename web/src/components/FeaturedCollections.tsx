@@ -31,7 +31,7 @@ export default function FeaturedCollections() {
         }
         .rk-collections-grid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 1.25rem;
         }
         .rk-collection-card {
@@ -116,7 +116,7 @@ export default function FeaturedCollections() {
             padding: 6rem 3rem;
           }
           .rk-collections-grid {
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 1.5rem;
           }
           .rk-collection-card {

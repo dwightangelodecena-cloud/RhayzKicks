@@ -43,7 +43,8 @@ interface ItemRow {
   id: string
   name: string
   brand: string
-  category: string
+  category: string // main category (first of categories)
+  categories: string[] // every category the product is listed under (025_*.sql)
   gender: Gender
   description: string
   base_price: number
@@ -89,11 +90,63 @@ interface ColorwayRow {
 const genders: Gender[] = ['unisex', 'men', 'women', 'kids']
 const genderLabels: Record<Gender, string> = { unisex: 'Everyone (unisex)', men: 'Men', women: 'Women', kids: 'Kids' }
 
-const emptyForm = { name: '', brand: 'Rhayz Kicks', category: '', gender: 'unisex' as Gender, base_price: '', cost_price: '', points_value: '', earns_loyalty: true, description: '' }
+const emptyForm = { name: '', brand: 'Rhayz Kicks', categories: [] as string[], gender: 'unisex' as Gender, base_price: '', cost_price: '', points_value: '', earns_loyalty: true, description: '' }
 const emptyVariantForm = { size: '', color: '', sku: '', quantity_on_hand: '10' }
 
 function randomSku() {
   return 'RK-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+}
+
+// Tick every category a product belongs to. The first one ticked is its
+// MAIN category (used on the product page and for "you may also like");
+// "Make main" moves another to the front. Saved as items.category +
+// items.categories (025_product_multiple_categories.sql).
+function CategoryPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: { slug: string; label: string }[]
+  value: string[]
+  onChange: (categories: string[]) => void
+}) {
+  // Keep categories that aren't in the menu list visible so they can be unticked.
+  const all = [...options, ...value.filter((v) => !options.some((o) => o.slug === v)).map((v) => ({ slug: v, label: `${v} (not in the menu)` }))]
+  const toggle = (slug: string) => {
+    if (value.includes(slug)) {
+      if (value.length === 1) return // a product needs at least one
+      onChange(value.filter((v) => v !== slug))
+    } else {
+      onChange([...value, slug])
+    }
+  }
+  const makeMain = (slug: string) => onChange([slug, ...value.filter((v) => v !== slug)])
+  return (
+    <div>
+      <div className="rk-cms-cat-picker" role="group" aria-label="Categories">
+        {all.map((o) => {
+          const on = value.includes(o.slug)
+          const main = value[0] === o.slug
+          return (
+            <span key={o.slug} className={`rk-cms-cat-chip ${on ? 'rk-cms-cat-chip-on' : ''}`}>
+              <button type="button" onClick={() => toggle(o.slug)} aria-pressed={on} title={on && value.length === 1 ? 'A product needs at least one category' : undefined}>
+                <span className="rk-cms-cat-check" aria-hidden="true">{on ? '✓' : '+'}</span>
+                {o.label}
+              </button>
+              {on && (main ? (
+                <span className="rk-cms-cat-main">Main</span>
+              ) : (
+                <button type="button" className="rk-cms-cat-make-main" onClick={() => makeMain(o.slug)} title="Use this as the main category">Make main</button>
+              ))}
+            </span>
+          )
+        })}
+      </div>
+      <span className="rk-ui-field-hint">
+        The shoe shows up under every category you tick. <b>Main</b> is used on the product page and for “You may also like”. New Releases also lists products added in the last 30 days automatically. Manage the list in Categories.
+      </span>
+    </div>
+  )
 }
 
 // "Add [N] pairs to every size" on one colorway.
@@ -265,12 +318,13 @@ export default function AdminProducts() {
   }, [])
 
   const addItem = async () => {
-    if (!form.name.trim() || !form.category.trim()) return
+    if (!form.name.trim() || form.categories.length === 0) return
     const nextOrder = (items.at(-1)?.sort_order ?? 0) + 1
     const { data: created, error: insertError } = await supabase.from('items').insert({
       name: form.name.trim(),
       brand: form.brand.trim(),
-      category: form.category.trim().toLowerCase(),
+      category: form.categories[0],
+      categories: form.categories,
       gender: form.gender,
       description: form.description.trim(),
       base_price: Number(form.base_price) || 0,
@@ -331,7 +385,8 @@ export default function AdminProducts() {
       .update({
         name: draft.name,
         brand: draft.brand,
-        category: draft.category.toLowerCase(),
+        category: (draft.categories?.[0] ?? draft.category).toLowerCase(),
+        categories: draft.categories?.length ? draft.categories : [draft.category.toLowerCase()],
         gender: draft.gender,
         description: draft.description,
         base_price: draft.base_price,
@@ -755,13 +810,15 @@ export default function AdminProducts() {
   const [confirm, setConfirm] = useState<{ title: string; subtitle?: string; body: string; confirmLabel: string; onConfirm: () => void } | null>(null)
 
   const categoryLabel = (slug: string) => categoryOptions.find((c) => c.slug === slug)?.label ?? slug
+  // Rows loaded before 025 may not have categories yet — fall back to the main one.
+  const cats = (item: Pick<ItemRow, 'category' | 'categories'>) => (item.categories?.length ? item.categories : item.category ? [item.category] : [])
   const query = search.trim().toLowerCase()
   const showingCount = items.filter((i) => i.is_active).length
   const visibleItems = items.filter((item) => {
     if (statusFilter === 'showing' && !item.is_active) return false
     if (statusFilter === 'hidden' && item.is_active) return false
     if (!query) return true
-    return [item.name, item.brand, item.category, categoryLabel(item.category), item.gender].some((s) => (s ?? '').toLowerCase().includes(query))
+    return [item.name, item.brand, ...cats(item), ...cats(item).map(categoryLabel), item.gender].some((s) => (s ?? '').toLowerCase().includes(query))
   })
   const allShownSelected = visibleItems.length > 0 && visibleItems.every((it) => selectedIds.has(it.id))
   const selectedNames = items.filter((it) => selectedIds.has(it.id)).map((it) => it.name)
@@ -995,14 +1052,10 @@ export default function AdminProducts() {
                   <span>Brand</span>
                   <input value={form.brand} onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value }))} />
                 </label>
-                <label className="rk-ui-field">
-                  <span>Category (required)</span>
-                  <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
-                    <option value="" disabled>Choose a category…</option>
-                    {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-                  </select>
-                  <span className="rk-ui-field-hint">Which menu link it appears under. Manage the list in Categories.</span>
-                </label>
+                <div className="rk-ui-field rk-ui-field-full">
+                  <span>Categories (pick at least one)</span>
+                  <CategoryPicker options={categoryOptions} value={form.categories} onChange={(categories) => setForm((f) => ({ ...f, categories }))} />
+                </div>
                 <label className="rk-ui-field">
                   <span>Who it’s for</span>
                   {genderSelect(form.gender, (g) => setForm((f) => ({ ...f, gender: g })))}
@@ -1057,9 +1110,9 @@ export default function AdminProducts() {
               After adding, use <b>Edit details</b> to add card photos and <b>Sizes &amp; photos</b> to add colorways and sizes.
             </p>
             <div className="rk-cms-form-actions">
-              {(!form.name.trim() || !form.category.trim()) && <span className="rk-cms-form-actions-note">A name and category are needed to save.</span>}
+              {(!form.name.trim() || form.categories.length === 0) && <span className="rk-cms-form-actions-note">A name and at least one category are needed to save.</span>}
               <button type="button" className="rk-ui-btn" onClick={() => { setAdding(false); setForm(emptyForm) }}>Cancel</button>
-              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addItem} disabled={!form.name.trim() || !form.category.trim()}>Add product</button>
+              <button type="button" className="rk-ui-btn rk-ui-btn-primary rk-ui-btn-lg" onClick={addItem} disabled={!form.name.trim() || form.categories.length === 0}>Add product</button>
             </div>
           </div>
         )}
@@ -1173,7 +1226,7 @@ export default function AdminProducts() {
                     <div className="rk-ui-list-main">
                       <div className="rk-ui-list-title">{item.name}</div>
                       <div className="rk-ui-list-meta">
-                        <Money amount={item.base_price} /> · {item.brand} · {categoryLabel(item.category)} · {genderLabels[item.gender] ?? item.gender}
+                        <Money amount={item.base_price} /> · {item.brand} · {cats(item).map(categoryLabel).join(', ')} · {genderLabels[item.gender] ?? item.gender}
                       </div>
                       {item.earns_loyalty === false && (
                         <div className="rk-cms-chips"><span className="rk-cms-chip">No loyalty points</span></div>
@@ -1232,16 +1285,14 @@ export default function AdminProducts() {
                             <span>Brand</span>
                             <input value={draft.brand} onChange={(e) => updateDraft({ brand: e.target.value })} />
                           </label>
-                          <label className="rk-ui-field">
-                            <span>Category</span>
-                            <select value={draft.category} onChange={(e) => updateDraft({ category: e.target.value })}>
-                              {!categoryOptions.some((c) => c.slug === draft.category) && (
-                                <option value={draft.category}>{draft.category || 'None'} (not in the menu)</option>
-                              )}
-                              {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-                            </select>
-                            <span className="rk-ui-field-hint">Which menu link it appears under.</span>
-                          </label>
+                          <div className="rk-ui-field rk-ui-field-full">
+                            <span>Categories</span>
+                            <CategoryPicker
+                              options={categoryOptions}
+                              value={cats(draft)}
+                              onChange={(categories) => categories.length > 0 && updateDraft({ categories, category: categories[0] })}
+                            />
+                          </div>
                           <label className="rk-ui-field">
                             <span>Who it’s for</span>
                             {genderSelect(draft.gender, (g) => updateDraft({ gender: g }))}

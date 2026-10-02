@@ -36,6 +36,7 @@ export default function ProductCard({ product, badgeOverride }: ProductCardProps
         .rk-product-card {
           display: flex;
           flex-direction: column;
+          min-width: 0;
         }
         .rk-product-media {
           position: relative;
