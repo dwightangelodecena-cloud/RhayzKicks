@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo'
@@ -153,6 +153,30 @@ export default function AuthPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  // "Forgot your password?" swaps the sign-in form for a send-reset-link form.
+  const [forgotMode, setForgotMode] = useState(false)
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null)
+  // Whether Google sign-in is switched on in Supabase (Authentication →
+  // Providers). null = still checking. When it's off we disable the button
+  // instead of sending people to Supabase's raw "provider is not enabled" page.
+  const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((settings) => {
+        if (!cancelled) setGoogleEnabled(settings ? Boolean(settings.external?.google) : true)
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleEnabled(true) // can't tell — let the button try
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const requirementChecks = passwordRequirements.map((r) => ({ ...r, met: r.test(password) }))
   const passwordValid = passwordMeetsRequirements(password)
@@ -214,8 +238,49 @@ export default function AuthPage() {
     navigate(staff ? '/admin/dashboard' : returnTo, { replace: true })
   }
 
+  const sendResetLink = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    resetFeedback()
+    const formData = new FormData(e.currentTarget)
+    const target = ((formData.get('email') as string) || email).trim()
+    if (!target) {
+      setError('Enter the email address you signed up with.')
+      return
+    }
+    setSubmitting(true)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(target, {
+      redirectTo: window.location.origin + '/reset-password',
+    })
+    setSubmitting(false)
+    if (resetError) {
+      // Rate limits are the common case here ("For security purposes, you can
+      // only request this after N seconds").
+      setError(resetError.message)
+      return
+    }
+    // Same message whether or not the account exists, so the form can't be
+    // used to check which emails are registered.
+    setResetSentTo(target)
+  }
+
+  const openForgot = () => {
+    resetFeedback()
+    setResetSentTo(null)
+    setForgotMode(true)
+  }
+
+  const closeForgot = () => {
+    resetFeedback()
+    setResetSentTo(null)
+    setForgotMode(false)
+  }
+
   const continueWithGoogle = async () => {
     resetFeedback()
+    if (googleEnabled === false) {
+      setError('Google sign-in isn’t available yet — please use your email and password.')
+      return
+    }
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin + '/' },
@@ -710,6 +775,38 @@ export default function AuthPage() {
         .rk-auth-forgot:hover {
           color: #111;
         }
+        .rk-auth-linkbtn {
+          width: 100%;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font: inherit;
+          font-size: 0.8125rem;
+        }
+        .rk-auth-forgot-title {
+          font-family: 'Barlow Condensed', sans-serif;
+          font-weight: 900;
+          font-size: 1.5rem;
+          text-transform: uppercase;
+          margin: 0 0 0.375rem;
+          color: #111;
+        }
+        .rk-auth-forgot-desc {
+          font-size: 0.875rem;
+          color: #666;
+          line-height: 1.5;
+          margin: 0 0 1.25rem;
+        }
+        .rk-auth-google:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .rk-auth-google-note {
+          text-align: center;
+          font-size: 0.75rem;
+          color: #888;
+          margin: 0.5rem 0 0;
+        }
         .rk-auth-back {
           display: block;
           text-align: center;
@@ -784,6 +881,37 @@ export default function AuthPage() {
           <button className={`rk-auth-tab ${isJoin ? 'rk-auth-tab-active' : ''}`} onClick={() => { navigate('/join', { state: location.state }); resetFeedback() }}>Join Us</button>
         </div>
 
+        {forgotMode && !isJoin ? (
+          <form onSubmit={sendResetLink}>
+            <p className="rk-auth-forgot-title">Reset your password</p>
+            {resetSentTo ? (
+              <>
+                <p className="rk-auth-success"><SuccessIcon />If an account exists for {resetSentTo}, we’ve sent a link to reset the password. Check your inbox (and spam folder) — the link opens a page where you choose a new password.</p>
+                <button type="button" className="rk-auth-submit" onClick={closeForgot}>
+                  <span>Back to Sign In</span>
+                  <ArrowIcon />
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="rk-auth-forgot-desc">Enter the email you use to sign in and we’ll email you a link to choose a new password.</p>
+                <div className="rk-auth-field">
+                  <label className="rk-auth-label" htmlFor="resetEmail">Email Address</label>
+                  <div className="rk-auth-input-wrap">
+                    <span className="rk-auth-input-icon"><MailIcon /></span>
+                    <input className="rk-auth-input rk-auth-input-has-icon" id="resetEmail" name="email" type="email" placeholder="maria@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" autoFocus />
+                  </div>
+                </div>
+                {error && <p className="rk-auth-error"><AlertIcon />{error}</p>}
+                <button type="submit" className="rk-auth-submit" disabled={submitting || !email.trim()}>
+                  <span>{submitting ? 'Sending…' : 'Send Reset Link'}</span>
+                  {!submitting && <ArrowIcon />}
+                </button>
+                <button type="button" className="rk-auth-forgot rk-auth-linkbtn" onClick={closeForgot}>← Back to Sign In</button>
+              </>
+            )}
+          </form>
+        ) : (
         <form onSubmit={submit}>
           {isJoin && (
             <div className="rk-auth-field">
@@ -857,13 +985,21 @@ export default function AuthPage() {
             <span>{submitting ? 'Please Wait…' : isJoin ? 'Create Account' : 'Sign In'}</span>
             {!submitting && <ArrowIcon />}
           </button>
-          {!isJoin && <Link to="#forgot" className="rk-auth-forgot">Forgot your password?</Link>}
+          {!isJoin && (
+            <button type="button" className="rk-auth-forgot rk-auth-linkbtn" onClick={openForgot}>Forgot your password?</button>
+          )}
         </form>
+        )}
 
-        <div className="rk-auth-divider">Or</div>
-        <button type="button" className="rk-auth-google" onClick={continueWithGoogle}>
-          <GoogleIcon /> Continue with Google
-        </button>
+        {!forgotMode && (
+          <>
+            <div className="rk-auth-divider">Or</div>
+            <button type="button" className="rk-auth-google" onClick={continueWithGoogle} disabled={googleEnabled === false}>
+              <GoogleIcon /> Continue with Google
+            </button>
+            {googleEnabled === false && <p className="rk-auth-google-note">Google sign-in is coming soon — use your email for now.</p>}
+          </>
+        )}
 
         <Link to="/" className="rk-auth-back">← Back to Home</Link>
         </div>

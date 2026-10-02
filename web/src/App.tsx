@@ -11,6 +11,7 @@ import ProductDetailPage from './pages/ProductDetailPage'
 import CollectionsPage from './pages/CollectionsPage'
 import HelpPage from './pages/HelpPage'
 import InfoPage from './pages/InfoPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import ScrollToTop from './components/ScrollToTop'
 import AccountPage from './pages/AccountPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
@@ -41,6 +42,7 @@ function App() {
                   <Route path="/collections" element={<CollectionsPage />} />
                   <Route path="/help" element={<HelpPage />} />
                   <Route path="/info/:slug" element={<InfoPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/account" element={<AccountPage />} />
                   <Route path="/order/success" element={<OrderSuccessPage />} />
                 </Route>

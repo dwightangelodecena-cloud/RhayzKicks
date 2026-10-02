@@ -96,6 +96,83 @@ function randomSku() {
   return 'RK-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
 }
 
+// "Add [N] pairs to every size" on one colorway.
+function ColorStockAdder({ color, sizeCount, onAdd }: { color: string; sizeCount: number; onAdd: (pairs: number) => Promise<void> }) {
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const n = Math.floor(Number(value))
+  const valid = value.trim() !== '' && n > 0
+  const submit = async () => {
+    if (!valid || busy) return
+    setBusy(true)
+    await onAdd(n)
+    setBusy(false)
+    setValue('')
+  }
+  return (
+    <div className="rk-cms-stock-adder">
+      <span>Add</span>
+      <input
+        type="number"
+        min={1}
+        step={1}
+        placeholder="0"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        aria-label={`Pairs to add to every ${color} size`}
+      />
+      <span>pairs to every size</span>
+      <button type="button" className="rk-ui-btn rk-ui-btn-primary" onClick={submit} disabled={!valid || busy} title={`Adds to all ${sizeCount} ${color} sizes`}>
+        {busy ? 'Adding…' : valid ? `+ ${n * sizeCount} pairs` : 'Add'}
+      </button>
+    </div>
+  )
+}
+
+// − [qty] + for one size. Typing saves on Enter / leaving the box, not on
+// every keystroke (typing "12" used to save 1, then 12).
+function SizeStockControl({ qty, label, onNudge, onSet }: { qty: number; label: string; onNudge: (delta: number) => Promise<void>; onSet: (n: number) => Promise<void> }) {
+  const [draft, setDraft] = useState(String(qty))
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    setDraft(String(qty))
+  }, [qty])
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true)
+    await fn()
+    setBusy(false)
+  }
+  const commit = () => {
+    const n = Math.floor(Number(draft))
+    if (draft.trim() === '' || !Number.isFinite(n) || n < 0) {
+      setDraft(String(qty))
+      return
+    }
+    if (n !== qty) run(() => onSet(n))
+  }
+  return (
+    <div className="rk-cms-stock-ctl" aria-label={`Pairs in stock, ${label}`}>
+      <button type="button" onClick={() => run(() => onNudge(-1))} disabled={busy || qty <= 0} aria-label={`One less pair, ${label}`}>−</button>
+      <input
+        type="number"
+        min={0}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') setDraft(String(qty))
+        }}
+        disabled={busy}
+        aria-label={`Pairs in stock, ${label}`}
+      />
+      <button type="button" onClick={() => run(() => onNudge(1))} disabled={busy} aria-label={`One more pair, ${label}`}>+</button>
+      <span className="rk-cms-stock-ctl-unit">pairs</span>
+    </div>
+  )
+}
+
 export default function AdminProducts() {
   const [items, setItems] = useState<ItemRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -580,15 +657,53 @@ export default function AdminProducts() {
     loadVariants(expandedId)
   }
 
-  const updateStock = async (sku: string, quantity_on_hand: number) => {
-    const previous = inventoryBySku[sku]?.quantity_on_hand
-    const { error: stockError } = await supabase.from('inventory').update({ quantity_on_hand }).eq('sku', sku)
-    if (stockError) return setError(stockError.message)
-    if (previous !== undefined) {
-      recordAction('Update stock', async () => {
-        await supabase.from('inventory').update({ quantity_on_hand: previous }).eq('sku', sku)
-      })
+  // Stock changes go through adjust_stock (same as the Inventory tab) so they
+  // show up in that size's history, and each gets an Undo step.
+  const changeStock = async (sku: string, change: number, type: 'restock' | 'adjustment', reason: string) => {
+    if (!change) return true
+    const { error: stockError } = await supabase.rpc('adjust_stock', {
+      p_sku: sku,
+      p_quantity_change: change,
+      p_type: type,
+      p_reason: reason,
+    })
+    if (stockError) {
+      setError(stockError.message)
+      return false
     }
+    recordAction(change > 0 ? `Add ${change} pairs` : `Remove ${-change} pairs`, async () => {
+      await supabase.rpc('adjust_stock', { p_sku: sku, p_quantity_change: -change, p_type: 'adjustment', p_reason: 'Undo in Content → Products' })
+    })
+    return true
+  }
+
+  // Set one size to an exact count (logged as an adjustment for the difference).
+  const updateStock = async (sku: string, quantity_on_hand: number) => {
+    const current = inventoryBySku[sku]?.quantity_on_hand ?? 0
+    const target = Math.max(0, Math.floor(quantity_on_hand))
+    if (target === current) return
+    await changeStock(sku, target - current, 'adjustment', `Set to ${target} in Content → Products`)
+    if (expandedId) loadVariants(expandedId)
+  }
+
+  // +/- buttons on a size.
+  const nudgeStock = async (sku: string, delta: number) => {
+    const current = inventoryBySku[sku]?.quantity_on_hand ?? 0
+    if (current + delta < 0) return
+    await changeStock(sku, delta, delta > 0 ? 'restock' : 'adjustment', delta > 0 ? 'Added in Content → Products' : 'Removed in Content → Products')
+    if (expandedId) loadVariants(expandedId)
+  }
+
+  // "Add N pairs to every size" on a colorway — e.g. a delivery of one color.
+  const addStockToColor = async (color: string, pairs: number) => {
+    const n = Math.floor(pairs)
+    if (!(n > 0)) return
+    const skus = variants.filter((v) => v.color === color).map((v) => v.sku)
+    for (const sku of skus) {
+      const ok = await changeStock(sku, n, 'restock', `Added to all ${color} sizes in Content → Products`)
+      if (!ok) break
+    }
+    setInfo(`Added ${n} ${n === 1 ? 'pair' : 'pairs'} to each of the ${skus.length} ${color} ${skus.length === 1 ? 'size' : 'sizes'}.`)
     if (expandedId) loadVariants(expandedId)
   }
 
@@ -1296,28 +1411,48 @@ export default function AdminProducts() {
                       <section className="rk-cms-group" style={{ marginBottom: 0 }}>
                         <h3 className="rk-cms-group-title">Sizes &amp; stock</h3>
                         <p className="rk-cms-group-desc">
-                          Each size + color shoppers can buy, and how many pairs you have. For day-to-day stock changes (deliveries, counts, damaged pairs), the Inventory tab keeps a history.
+                          Each size shoppers can buy, grouped by colorway. Use “Add pairs to every size” when a delivery of one color comes in, or − / + and the pairs box on a single size (type a number, then press Enter). Every change is saved to the Inventory tab’s history.
                         </p>
                         {variants.length === 0 ? (
                           <EmptyState title="No sizes yet" hint="Add sizes below — shoppers can’t buy this shoe until it has at least one size." />
                         ) : (
-                          <div className="rk-ui-list">
-                            {variants.map((v) => {
+                          [...new Set([...colorways.map((c) => c.color), ...variants.map((v) => v.color)])]
+                            .filter((color) => variants.some((v) => v.color === color))
+                            .map((color) => {
+                              const colorVariants = variants
+                                .filter((v) => v.color === color)
+                                .sort((a, b) => a.size.localeCompare(b.size, undefined, { numeric: true }))
+                              const colorTotal = colorVariants.reduce((sum, v) => sum + (inventoryBySku[v.sku]?.quantity_on_hand ?? 0), 0)
+                              return (
+                                <div key={color} className="rk-cms-stock-color">
+                                  <div className="rk-cms-stock-color-head">
+                                    <div>
+                                      <div className="rk-cms-stock-color-name">{color}</div>
+                                      <div className="rk-ui-list-meta">
+                                        {colorVariants.length} {colorVariants.length === 1 ? 'size' : 'sizes'} · {colorTotal} {colorTotal === 1 ? 'pair' : 'pairs'} in stock
+                                      </div>
+                                    </div>
+                                    <ColorStockAdder color={color} sizeCount={colorVariants.length} onAdd={(n) => addStockToColor(color, n)} />
+                                  </div>
+                                  <div className="rk-ui-list">
+                            {colorVariants.map((v) => {
                               const inv = inventoryBySku[v.sku]
                               const qty = inv?.quantity_on_hand ?? 0
                               const low = inv ? qty <= inv.reorder_level : false
                               return (
                                 <div key={v.id} className={`rk-ui-list-row ${qty === 0 ? 'rk-ui-list-row-alert' : low ? 'rk-ui-list-row-warn' : ''}`}>
                                   <div className="rk-ui-list-main">
-                                    <div className="rk-ui-list-title">Size {v.size} · {v.color}</div>
+                                    <div className="rk-ui-list-title">Size {v.size}</div>
                                     <div className="rk-ui-list-meta"><span className="rk-cms-prod-sku">SKU {v.sku}</span></div>
                                   </div>
                                   <div className="rk-ui-list-side">
                                     <Pill tone={qty === 0 ? 'alert' : low ? 'warn' : 'ok'}>{qty === 0 ? 'Sold out' : low ? 'Running low' : 'In stock'}</Pill>
-                                    <label className="rk-cms-prod-variant-stock">
-                                      Pairs
-                                      <input type="number" min={0} value={qty} onChange={(e) => updateStock(v.sku, Number(e.target.value))} aria-label={`Pairs in stock, size ${v.size} ${v.color}`} />
-                                    </label>
+                                    <SizeStockControl
+                                      qty={qty}
+                                      label={`size ${v.size} ${v.color}`}
+                                      onNudge={(d) => nudgeStock(v.sku, d)}
+                                      onSet={(n) => updateStock(v.sku, n)}
+                                    />
                                     <button
                                       type="button"
                                       className="rk-ui-btn rk-ui-btn-danger"
@@ -1337,7 +1472,10 @@ export default function AdminProducts() {
                                 </div>
                               )
                             })}
-                          </div>
+                                  </div>
+                                </div>
+                              )
+                            })
                         )}
 
                         <div className="rk-ui-form rk-cms-prod-variant-form">

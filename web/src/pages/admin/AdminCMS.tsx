@@ -598,6 +598,80 @@ function AdminCMSInner() {
           color: var(--text-muted);
           margin: 0.25rem 0 0.875rem;
         }
+        /* Products → Sizes & stock, grouped by colorway */
+        .rk-cms-stock-color + .rk-cms-stock-color {
+          margin-top: 1rem;
+        }
+        .rk-cms-stock-color-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+          margin-bottom: 0.5rem;
+        }
+        .rk-cms-stock-color-name {
+          font-weight: 800;
+          font-size: 0.9375rem;
+          color: var(--text);
+          text-transform: capitalize;
+        }
+        .rk-cms-stock-adder {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          flex-wrap: wrap;
+          font-size: 0.8125rem;
+          color: var(--text-muted);
+        }
+        .rk-cms-stock-adder input {
+          box-sizing: border-box;
+          width: 4.5rem;
+          padding: 0.45rem 0.6rem;
+          border: 1px solid var(--border);
+          border-radius: 0.5rem;
+          background: var(--bg);
+          color: var(--text);
+          font: inherit;
+        }
+        .rk-cms-stock-ctl {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+        .rk-cms-stock-ctl button {
+          width: 2rem;
+          height: 2rem;
+          border-radius: 0.5rem;
+          border: 1px solid var(--border);
+          background: var(--bg-secondary);
+          color: var(--text);
+          font-size: 1rem;
+          font-weight: 800;
+          cursor: pointer;
+          line-height: 1;
+        }
+        .rk-cms-stock-ctl button:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .rk-cms-stock-ctl input {
+          box-sizing: border-box;
+          width: 3.75rem;
+          height: 2rem;
+          text-align: center;
+          border: 1px solid var(--border);
+          border-radius: 0.5rem;
+          background: var(--bg);
+          color: var(--text);
+          font: inherit;
+          font-weight: 800;
+        }
+        .rk-cms-stock-ctl-unit {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          margin-left: 0.125rem;
+        }
         /* Products → Select mode (bulk delete) */
         .rk-cms-select-bar {
           display: flex;
