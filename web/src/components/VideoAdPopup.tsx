@@ -266,7 +266,7 @@ export default function VideoAdPopup() {
           <div className="rk-video-ad-expanded" onClick={(e) => e.stopPropagation()}>
             <video
               className="rk-video-ad-expanded-video"
-              src="/videos/shoe-ad.mp4"
+              src="/videos/rhayz-ad.mp4"
               autoPlay
               loop
               muted={muted}
@@ -302,7 +302,7 @@ export default function VideoAdPopup() {
       {sharedStyles}
       <video
         className="rk-video-ad-video"
-        src="/videos/shoe-ad.mp4"
+        src="/videos/rhayz-ad.mp4"
         autoPlay
         loop
         muted={muted}
