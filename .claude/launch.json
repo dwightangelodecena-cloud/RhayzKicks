@@ -20,6 +20,13 @@
       "port": 8090
     },
     {
+      "name": "mobile-web-release",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["web/node_modules/vite/bin/vite.js", "preview", "Rhayzkicks Mobile/build/web", "--outDir", ".", "--port", "8091", "--strictPort"],
+      "port": 8091,
+      "autoPort": false
+    },
+    {
       "name": "web-phone",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "web", "exec", "--", "vite", "preview", "web", "--host", "0.0.0.0", "--port", "4173", "--strictPort"],

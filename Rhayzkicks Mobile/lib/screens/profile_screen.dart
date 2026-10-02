@@ -9,13 +9,17 @@ import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/page_hero.dart';
 import '../widgets/rewards_panel.dart';
+import '../widgets/video_ads.dart';
 import 'orders_screen.dart';
 
 // Mirrors web's AccountPage.tsx: profile info, address, rewards, theme
 // (mobile-only — web's theme toggle stays where it already is), and
 // privacy/security (change password). Reached from the nav drawer.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.initialTab = 'profile'});
+
+  // 'profile' | 'rewards' | 'security' — e.g. the Part 2 ad opens Rewards.
+  final String initialTab;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -40,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _passwordError;
 
   String? _loadedCustomerId;
-  String _activeTab = 'profile';
+  late String _activeTab = widget.initialTab;
 
   @override
   void dispose() {
@@ -212,6 +216,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ],
                                 ),
                                 const RewardsPanel(),
+                                // Unlocked by any purchase — total_purchases counts paid online orders and POS sales.
+                                Part2AdCard(
+                                  unlocked: customer.totalPurchases > 0,
+                                  onShop: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                                ),
                               ],
                             ),
                           if (_activeTab == 'security') ...[

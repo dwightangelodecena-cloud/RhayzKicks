@@ -54,6 +54,18 @@ class AuthController extends ChangeNotifier {
   int _pointsJustEarned = 0;
   int get pointsJustEarned => _pointsJustEarned;
 
+  // Set when total_purchases goes up for the signed-in customer (a paid web
+  // order or a POS sale) — LoyaltyPointsPopup then shows the Part 2 ad once
+  // the points popup is closed. Mirrors web's OrderSuccessPage trigger.
+  bool _part2Pending = false;
+  bool get part2Pending => _part2Pending;
+
+  void clearPart2() {
+    if (!_part2Pending) return;
+    _part2Pending = false;
+    notifyListeners();
+  }
+
   void clearEarnedPoints() {
     if (_pointsJustEarned == 0) return;
     _pointsJustEarned = 0;
@@ -67,6 +79,10 @@ class AuthController extends ChangeNotifier {
     if (prev != null && next != null && prev.id == next.id && next.loyaltyPoints > prev.loyaltyPoints) {
       _pointsJustEarned += next.loyaltyPoints - prev.loyaltyPoints;
     }
+    if (prev != null && next != null && prev.id == next.id && next.totalPurchases > prev.totalPurchases) {
+      _part2Pending = true;
+    }
+    if (next == null) _part2Pending = false;
     _customer = next;
     _syncCustomerChannel();
   }

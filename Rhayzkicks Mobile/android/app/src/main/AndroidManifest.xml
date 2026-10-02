@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Needed in release builds for Supabase, the Laravel API and the video ads
+         (debug/profile manifests already add it). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="rhayzkicks_mobile"
         android:name="${applicationName}"

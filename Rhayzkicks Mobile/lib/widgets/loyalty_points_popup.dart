@@ -5,6 +5,7 @@ import '../screens/profile_screen.dart';
 import '../state/auth_controller.dart';
 import '../theme/app_theme.dart';
 import 'rewards_panel.dart';
+import 'video_ads.dart';
 
 // Mirrors web's LoyaltyPointsPopup.tsx. Wraps the whole app (MaterialApp
 // builder) and pops a card over everything whenever AuthController reports
@@ -70,6 +71,17 @@ class _LoyaltyPointsPopupState extends State<LoyaltyPointsPopup> with WidgetsBin
               onViewPoints: () {
                 auth.clearEarnedPoints();
                 widget.navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
+              },
+            ),
+          ),
+        // Part 2 of the ad waits until the points popup is closed.
+        if (earned == 0 && auth.part2Pending)
+          Positioned.fill(
+            child: Part2AdOverlay(
+              onClose: auth.clearPart2,
+              onViewInAccount: () {
+                auth.clearPart2();
+                widget.navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const ProfileScreen(initialTab: 'rewards')));
               },
             ),
           ),

@@ -12,6 +12,7 @@ import '../widgets/rk_nav_drawer.dart';
 import '../widgets/rk_top_bar.dart';
 import '../widgets/shop_by_activity.dart';
 import '../widgets/signature_silhouettes.dart';
+import '../widgets/video_ads.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -25,32 +26,38 @@ class HomeScreen extends StatelessWidget {
       drawer: const RkNavDrawer(),
       // SafeArea keeps content clear of the notch / dynamic island (top) and
       // the home-indicator gesture area (bottom).
-      body: SafeArea(
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverToBoxAdapter(child: AnnouncementTicker()),
-            SliverAppBar(
-              pinned: true,
-              floating: true,
-              automaticallyImplyLeading: false,
-              toolbarHeight: 56,
-              titleSpacing: 0,
-              flexibleSpace: RkTopBar(cartCount: cartCount),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                SliverToBoxAdapter(child: AnnouncementTicker()),
+                SliverAppBar(
+                  pinned: true,
+                  floating: true,
+                  automaticallyImplyLeading: false,
+                  toolbarHeight: 56,
+                  titleSpacing: 0,
+                  flexibleSpace: RkTopBar(cartCount: cartCount),
+                ),
+              ],
+              body: ListView(
+                padding: EdgeInsets.zero,
+                children: const [
+                  HeroCarousel(),
+                  FeaturedCollections(),
+                  PromoBanner(),
+                  ShopByActivity(),
+                  SignatureSilhouettes(),
+                  MemberCTA(),
+                  RkFooter(),
+                ],
+              ),
             ),
-          ],
-          body: ListView(
-            padding: EdgeInsets.zero,
-            children: const [
-              HeroCarousel(),
-              FeaturedCollections(),
-              PromoBanner(),
-              ShopByActivity(),
-              SignatureSilhouettes(),
-              MemberCTA(),
-              RkFooter(),
-            ],
           ),
-        ),
+          // Part 1 of the video ad (web: VideoAdPopup), bottom-right.
+          const Part1AdBubble(),
+        ],
       ),
     );
   }
