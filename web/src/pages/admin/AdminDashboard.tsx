@@ -12,7 +12,8 @@ import AdminOnlineOrders from './AdminOnlineOrders'
 import AdminTeam from './AdminTeam'
 import AdminLoyalty from './AdminLoyalty'
 import StaffMyHours from './StaffMyHours'
-import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, IconPackageCheck, IconStore, IconTruck, IconUsers, IconWallet } from './adminIcons'
+import AdminProfile from './AdminProfile'
+import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, IconPackageCheck, IconStore, IconTruck, IconUser, IconUsers, IconWallet } from './adminIcons'
 import type { StaffRole } from '../../types/database.types'
 
 const tabs = [
@@ -25,6 +26,7 @@ const tabs = [
   { label: 'Staff', icon: IconUsers, blurb: 'Team members, roles & hours worked', roles: ['admin'] },
   { label: 'My Hours', icon: IconClock, blurb: 'Clock in / clock out', roles: ['staff'] },
   { label: 'Loyalty', icon: IconMedal, blurb: 'Redemption options & issued vouchers', roles: ['admin'] },
+  { label: 'My Profile', icon: IconUser, blurb: 'Your account details & password', roles: ['admin', 'staff'] },
 ] as const
 
 type TabLabel = (typeof tabs)[number]['label']
@@ -191,6 +193,17 @@ export default function AdminDashboard() {
           gap: 0.625rem;
           padding: 0.5rem 0.5rem;
           margin-bottom: 0.25rem;
+          width: 100%;
+          border: none;
+          border-radius: 0.5rem;
+          background: none;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+          transition: background-color var(--duration-fast) var(--ease-out);
+        }
+        .rk-admin-profile:hover {
+          background: rgba(255, 255, 255, 0.06);
         }
         .rk-admin-profile-avatar {
           width: 30px;
@@ -444,13 +457,13 @@ export default function AdminDashboard() {
         </nav>
 
         <div className="rk-admin-sidebar-footer">
-          <div className="rk-admin-profile">
+          <button type="button" className="rk-admin-profile" onClick={() => goTo('My Profile')} title="My Profile">
             <div className="rk-admin-profile-avatar">{initials}</div>
             <div className="rk-admin-profile-text">
               <div className="rk-admin-profile-email">{adminEmail ?? 'Loading…'}</div>
               <div className="rk-admin-profile-role">{role === 'admin' ? 'Admin' : 'Staff'}</div>
             </div>
-          </div>
+          </button>
           <button className="rk-admin-sidebar-action" onClick={() => navigate('/')}>
             <IconStore /> View Store
           </button>
@@ -486,6 +499,7 @@ export default function AdminDashboard() {
           {tab === 'Staff' && <AdminTeam />}
           {tab === 'My Hours' && <StaffMyHours />}
           {tab === 'Loyalty' && <AdminLoyalty />}
+          {tab === 'My Profile' && <AdminProfile />}
         </div>
       </div>
     </div>
