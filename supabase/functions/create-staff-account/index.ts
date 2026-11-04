@@ -59,11 +59,6 @@ Deno.serve(async (req) => {
     const fullName = String(body.full_name ?? '').trim()
     const phone = String(body.phone ?? '').trim()
     const role = body.role === 'admin' || body.role === 'developer' ? body.role : 'staff'
-    // This runs as service_role, which the DB's developer-role trigger lets
-    // through — so the "only a developer can add a developer" rule lives here.
-    if (role === 'developer' && !callerIsDeveloper) {
-      return json({ error: 'Only a developer can add a developer account.' }, 403)
-    }
     const employeeId = String(body.employee_id ?? '').trim()
 
     if (!email || !fullName) return json({ error: 'Email and full name are required.' }, 400)
@@ -71,6 +66,14 @@ Deno.serve(async (req) => {
 
     // Bypasses RLS — only reached after the admin check above.
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    // This runs as service_role, which the DB's developer-role trigger lets
+    // through — so the developer rule lives here too: any admin may add the
+    // first developer, after that only a developer can add more.
+    if (role === 'developer' && !callerIsDeveloper) {
+      const { count } = await adminClient.from('staff').select('id', { count: 'exact', head: true }).eq('role', 'developer')
+      if ((count ?? 0) > 0) return json({ error: 'Only a developer can add a developer account.' }, 403)
+    }
 
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,

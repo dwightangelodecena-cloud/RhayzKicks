@@ -28,7 +28,8 @@ const roleInfo: Record<StaffRole, { label: string; desc: string }> = {
   developer: { label: 'Developer', desc: 'Same access as an admin, for support. Only a developer can change its role; admins can deactivate it.' },
 }
 
-// Developer is only offered to developers (the DB enforces the same rule).
+// Developer is only offered to developers, or to admins while no developer
+// exists yet (the DB and create-staff-account enforce the same rule).
 const baseRoles: StaffRole[] = ['staff', 'admin']
 const allRoles: StaffRole[] = ['staff', 'admin', 'developer']
 
@@ -48,8 +49,11 @@ function fmtDate(iso: string | null | undefined) {
 
 export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () => void; onViewHours?: (staffId: string) => void } = {}) {
   const { isDeveloper } = useAdmin()
-  const roles = isDeveloper ? allRoles : baseRoles
   const [staff, setStaff] = useState<StaffRow[]>([])
+  // Until the first developer exists, any admin can add one (that's how the
+  // first one gets set up); after that only developers can.
+  const noDeveloperYet = !staff.some((s) => s.role === 'developer')
+  const roles = isDeveloper || noDeveloperYet ? allRoles : baseRoles
   const [selfId, setSelfId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

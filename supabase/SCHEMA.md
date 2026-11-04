@@ -285,7 +285,7 @@ whoever builds and maintains the system so they keep support access after handov
 
 - **Same access as an admin** — `is_admin()` is true for `admin` and `developer`, so every admin RLS
   policy and admin tab applies. `is_developer()` is the narrower check.
-- **`staff_protect_developer_role`** trigger — only a developer can insert a developer row, change a
+- **`staff_protect_developer_role`** trigger — only a developer can insert a developer row (any admin may add the first one, per `027_first_developer_by_admin.sql`), change a
   role to or from `developer`, or delete a developer row. Admins can still deactivate/reactivate a
   developer, so the shop owner can always switch support access off. Changes with no signed-in user
   (SQL editor, `service_role`) skip the check — that's how the first developer is set, and
