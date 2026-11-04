@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
       .select('role, is_active')
       .eq('id', userData.user.id)
       .maybeSingle()
-    if (!callerStaff || callerStaff.role !== 'admin' || !callerStaff.is_active) {
+    const callerIsDeveloper = callerStaff?.role === 'developer'
+    if (!callerStaff || !(callerStaff.role === 'admin' || callerIsDeveloper) || !callerStaff.is_active) {
       return json({ error: 'Only an active admin can create staff accounts.' }, 403)
     }
 
@@ -57,7 +58,12 @@ Deno.serve(async (req) => {
     const password = String(body.password ?? '')
     const fullName = String(body.full_name ?? '').trim()
     const phone = String(body.phone ?? '').trim()
-    const role = body.role === 'admin' ? 'admin' : 'staff'
+    const role = body.role === 'admin' || body.role === 'developer' ? body.role : 'staff'
+    // This runs as service_role, which the DB's developer-role trigger lets
+    // through — so the "only a developer can add a developer" rule lives here.
+    if (role === 'developer' && !callerIsDeveloper) {
+      return json({ error: 'Only a developer can add a developer account.' }, 403)
+    }
     const employeeId = String(body.employee_id ?? '').trim()
 
     if (!email || !fullName) return json({ error: 'Email and full name are required.' }, 400)

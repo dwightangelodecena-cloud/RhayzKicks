@@ -170,7 +170,7 @@ export default function AdminProfile() {
               <div>
                 <dt>Role</dt>
                 <dd>
-                  <Pill tone={profile?.role === 'admin' ? 'info' : 'neutral'}>{profile?.role === 'admin' ? 'Admin' : 'Staff'}</Pill>
+                  <Pill tone={profile?.role === 'staff' ? 'neutral' : 'info'}>{profile?.role === 'developer' ? 'Developer' : profile?.role === 'admin' ? 'Admin' : 'Staff'}</Pill>
                 </dd>
               </div>
               <div>

@@ -17,16 +17,16 @@ import { IconBox, IconClock, IconLayers, IconLogout, IconMedal, IconOverview, Ic
 import type { StaffRole } from '../../types/database.types'
 
 const tabs = [
-  { label: 'Overview', icon: IconOverview, blurb: 'Store performance at a glance', roles: ['admin'] },
-  { label: 'Sales', icon: IconWallet, blurb: 'Ring up a sale', roles: ['admin', 'staff'] },
-  { label: 'Inventory', icon: IconBox, blurb: 'Stock on hand & restocks', roles: ['admin', 'staff'] },
-  { label: 'Delivery', icon: IconPackageCheck, blurb: 'Track packing, pickup & delivery for online orders', roles: ['admin', 'staff'] },
-  { label: 'Content', icon: IconLayers, blurb: 'Banners, collections, categories & products — everything on the storefront', roles: ['admin'] },
-  { label: 'Vendors', icon: IconTruck, blurb: 'Suppliers & purchase orders', roles: ['admin'] },
-  { label: 'Staff', icon: IconUsers, blurb: 'Team members, roles & hours worked', roles: ['admin'] },
+  { label: 'Overview', icon: IconOverview, blurb: 'Store performance at a glance', roles: ['admin', 'developer'] },
+  { label: 'Sales', icon: IconWallet, blurb: 'Ring up a sale', roles: ['admin', 'developer', 'staff'] },
+  { label: 'Inventory', icon: IconBox, blurb: 'Stock on hand & restocks', roles: ['admin', 'developer', 'staff'] },
+  { label: 'Delivery', icon: IconPackageCheck, blurb: 'Track packing, pickup & delivery for online orders', roles: ['admin', 'developer', 'staff'] },
+  { label: 'Content', icon: IconLayers, blurb: 'Banners, collections, categories & products — everything on the storefront', roles: ['admin', 'developer'] },
+  { label: 'Vendors', icon: IconTruck, blurb: 'Suppliers & purchase orders', roles: ['admin', 'developer'] },
+  { label: 'Staff', icon: IconUsers, blurb: 'Team members, roles & hours worked', roles: ['admin', 'developer'] },
   { label: 'My Hours', icon: IconClock, blurb: 'Clock in / clock out', roles: ['staff'] },
-  { label: 'Loyalty', icon: IconMedal, blurb: 'Redemption options & issued vouchers', roles: ['admin'] },
-  { label: 'My Profile', icon: IconUser, blurb: 'Your account details & password', roles: ['admin', 'staff'] },
+  { label: 'Loyalty', icon: IconMedal, blurb: 'Redemption options & issued vouchers', roles: ['admin', 'developer'] },
+  { label: 'My Profile', icon: IconUser, blurb: 'Your account details & password', roles: ['admin', 'developer', 'staff'] },
 ] as const
 
 type TabLabel = (typeof tabs)[number]['label']
@@ -461,7 +461,7 @@ export default function AdminDashboard() {
             <div className="rk-admin-profile-avatar">{initials}</div>
             <div className="rk-admin-profile-text">
               <div className="rk-admin-profile-email">{adminEmail ?? 'Loading…'}</div>
-              <div className="rk-admin-profile-role">{role === 'admin' ? 'Admin' : 'Staff'}</div>
+              <div className="rk-admin-profile-role">{role === 'developer' ? 'Developer' : role === 'admin' ? 'Admin' : 'Staff'}</div>
             </div>
           </button>
           <button className="rk-admin-sidebar-action" onClick={() => navigate('/')}>

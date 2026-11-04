@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../supabase'
+import { useAdmin } from '../../context/AdminContext'
 import { adminCardStyles } from './adminCardStyles'
 import { IconUsers } from './adminIcons'
 import { EmptyState, Modal, Notice, Pill, SearchInput, SectionHead, Segmented, Toolbar } from './adminUi'
@@ -24,9 +25,14 @@ type Filter = 'all' | 'admin' | 'staff' | 'inactive'
 const roleInfo: Record<StaffRole, { label: string; desc: string }> = {
   admin: { label: 'Admin', desc: 'Every tab — products, content, vendors, loyalty, the team and reports.' },
   staff: { label: 'Staff', desc: 'Day-to-day work only — Sales, Inventory, Delivery and their own clock-in.' },
+  developer: { label: 'Developer', desc: 'Same access as an admin, for support. Only a developer can change its role; admins can deactivate it.' },
 }
 
-const roles: StaffRole[] = ['staff', 'admin']
+// Developer is only offered to developers (the DB enforces the same rule).
+const baseRoles: StaffRole[] = ['staff', 'admin']
+const allRoles: StaffRole[] = ['staff', 'admin', 'developer']
+
+const roleWithArticle = (r: StaffRole) => (r === 'staff' ? 'Staff' : r === 'admin' ? 'an Admin' : 'a Developer')
 
 const emptyForm = { email: '', password: '', full_name: '', phone: '', role: 'staff' as StaffRole, employee_id: '' }
 
@@ -41,6 +47,8 @@ function fmtDate(iso: string | null | undefined) {
 }
 
 export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () => void; onViewHours?: (staffId: string) => void } = {}) {
+  const { isDeveloper } = useAdmin()
+  const roles = isDeveloper ? allRoles : baseRoles
   const [staff, setStaff] = useState<StaffRow[]>([])
   const [selfId, setSelfId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -163,7 +171,7 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
       const name = pending.row.full_name
       setNotice(
         pending.kind === 'role'
-          ? `${name} is now ${pending.role === 'admin' ? 'an Admin' : 'Staff'}.`
+          ? `${name} is now ${roleWithArticle(pending.role)}.`
           : pending.row.is_active
             ? `${name} was deactivated and can no longer open the admin area.`
             : `${name} was reactivated and can sign in again.`,
@@ -177,7 +185,7 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
   const counts = useMemo(
     () => ({
       all: staff.length,
-      admin: staff.filter((s) => s.is_active && s.role === 'admin').length,
+      admin: staff.filter((s) => s.is_active && s.role !== 'staff').length,
       staff: staff.filter((s) => s.is_active && s.role === 'staff').length,
       inactive: staff.filter((s) => !s.is_active).length,
     }),
@@ -187,7 +195,7 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return staff.filter((s) => {
-      if (filter === 'admin' && !(s.is_active && s.role === 'admin')) return false
+      if (filter === 'admin' && !(s.is_active && s.role !== 'staff')) return false
       if (filter === 'staff' && !(s.is_active && s.role === 'staff')) return false
       if (filter === 'inactive' && s.is_active) return false
       if (!q) return true
@@ -373,7 +381,7 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
         </Toolbar>
 
         <div className="rk-team-legend">
-          {roles
+          {(isDeveloper || staff.some((s) => s.role === 'developer') ? allRoles : baseRoles)
             .slice()
             .reverse()
             .map((r) => (
@@ -398,20 +406,24 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
             {visible.map((s) => {
               const isSelf = s.id === selfId
               const onlyActiveAdmin = s.role === 'admin' && s.is_active && activeAdmins === 1
+              const isDevRow = s.role === 'developer'
               const lockRole = isSelf || onlyActiveAdmin
               const lockReason = isSelf
                 ? 'This is you — another admin has to change your role or deactivate you.'
                 : onlyActiveAdmin
                   ? 'Only active admin — make someone else an admin first.'
-                  : null
+                  : isDevRow && !isDeveloper
+                    ? 'Developer support account — you can deactivate it, but only a developer can change its role.'
+                    : null
               const hired = fmtDate(s.date_hired)
-              const otherRole: StaffRole = s.role === 'admin' ? 'staff' : 'admin'
+              const otherRole: StaffRole = s.role === 'staff' ? 'admin' : s.role === 'admin' ? 'staff' : 'admin'
+              const canChangeRole = !isDevRow || isDeveloper
               return (
                 <div
                   key={s.id}
                   className={`rk-ui-list-row ${s.is_active ? '' : 'rk-team-row-off'}`}
                 >
-                  <div className={`rk-team-avatar ${s.role === 'admin' ? 'rk-team-avatar-admin' : ''}`} aria-hidden="true">
+                  <div className={`rk-team-avatar ${s.role !== 'staff' ? 'rk-team-avatar-admin' : ''}`} aria-hidden="true">
                     {(s.full_name || s.email || '?').trim().charAt(0)}
                   </div>
                   <div className="rk-ui-list-main">
@@ -429,24 +441,37 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
                   </div>
                   <div className="rk-ui-list-side">
                     <div className="rk-team-pills">
-                      <Pill tone={s.role === 'admin' ? 'info' : 'neutral'}>{roleInfo[s.role].label}</Pill>
+                      <Pill tone={s.role === 'developer' ? 'warn' : s.role === 'admin' ? 'info' : 'neutral'}>{roleInfo[s.role].label}</Pill>
                       <Pill tone={s.is_active ? 'ok' : 'alert'}>{s.is_active ? 'Active' : 'Deactivated'}</Pill>
                     </div>
                     <div className="rk-team-actions">
-                      {onViewHours && s.role !== 'admin' && (
+                      {onViewHours && s.role === 'staff' && (
                         <button type="button" className="rk-ui-btn rk-ui-btn-ghost" onClick={() => onViewHours(s.id)}>
                           View hours
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="rk-ui-btn"
-                        onClick={() => setPending({ kind: 'role', row: s, role: otherRole })}
-                        disabled={lockRole}
-                        title={lockReason ?? undefined}
-                      >
-                        {otherRole === 'admin' ? 'Make admin' : 'Make staff'}
-                      </button>
+                      {canChangeRole && (
+                        <button
+                          type="button"
+                          className="rk-ui-btn"
+                          onClick={() => setPending({ kind: 'role', row: s, role: otherRole })}
+                          disabled={lockRole}
+                          title={lockReason ?? undefined}
+                        >
+                          {otherRole === 'admin' ? 'Make admin' : 'Make staff'}
+                        </button>
+                      )}
+                      {isDeveloper && !isDevRow && (
+                        <button
+                          type="button"
+                          className="rk-ui-btn"
+                          onClick={() => setPending({ kind: 'role', row: s, role: 'developer' })}
+                          disabled={lockRole}
+                          title={lockReason ?? undefined}
+                        >
+                          Make developer
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={`rk-ui-btn ${s.is_active ? 'rk-ui-btn-danger' : ''}`}
@@ -544,7 +569,7 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
         <Modal
           title={
             pending.kind === 'role'
-              ? `Make ${pending.row.full_name} ${pending.role === 'admin' ? 'an admin' : 'staff'}?`
+              ? `Make ${pending.row.full_name} ${roleWithArticle(pending.role).toLowerCase()}?`
               : `${pending.row.is_active ? 'Deactivate' : 'Reactivate'} ${pending.row.full_name}?`
           }
           onClose={() => !applying && setPending(null)}
@@ -561,7 +586,7 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
                 {applying
                   ? 'Saving…'
                   : pending.kind === 'role'
-                    ? `Yes, make ${pending.role === 'admin' ? 'admin' : 'staff'}`
+                    ? `Yes, make ${pending.role}`
                     : pending.row.is_active
                       ? 'Yes, deactivate'
                       : 'Yes, reactivate'}
@@ -571,11 +596,15 @@ export default function AdminStaff({ onChanged, onViewHours }: { onChanged?: () 
         >
           <p className="rk-team-confirm-text">
             {pending.kind === 'role'
-              ? pending.role === 'admin'
-                ? 'They will be able to open every tab, including products, content, vendors, loyalty, reports and this Staff tab.'
-                : 'They will only see Sales, Inventory, Delivery and their own clock-in. They lose access to every other tab.'
+              ? pending.role === 'developer'
+                ? 'They get full admin access, and admins will no longer be able to change their role — only deactivate them.'
+                : pending.role === 'admin'
+                  ? 'They will be able to open every tab, including products, content, vendors, loyalty, reports and this Staff tab.'
+                  : 'They will only see Sales, Inventory, Delivery and their own clock-in. They lose access to every other tab.'
               : pending.row.is_active
-                ? 'They will no longer be able to open the admin area. Their past sales and shifts are kept, and you can reactivate them at any time.'
+                ? pending.row.role === 'developer'
+                  ? 'This switches off the developer’s support access to the admin area. You can reactivate it any time you want their help again.'
+                  : 'They will no longer be able to open the admin area. Their past sales and shifts are kept, and you can reactivate them at any time.'
                 : 'They will be able to sign in to the admin area again with their existing email and password.'}
           </p>
         </Modal>

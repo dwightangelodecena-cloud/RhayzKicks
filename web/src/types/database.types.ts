@@ -3,7 +3,7 @@
 // Consumed by the React web app; the Flutter app gets an equivalent set of Dart models
 // in Rhayzkicks Mobile/lib/models/database_models.dart.
 
-export type StaffRole = "staff" | "admin";
+export type StaffRole = "staff" | "admin" | "developer";
 export type PaymentMethod = "cash" | "card" | "gcash" | "other";
 export type SaleStatus = "completed" | "refunded" | "voided";
 export type StockMovementType = "restock" | "sale" | "return" | "adjustment" | "damaged";

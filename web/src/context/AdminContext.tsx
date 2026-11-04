@@ -5,6 +5,7 @@ import type { StaffRole } from '../types/database.types'
 
 interface AdminContextValue {
   isAdmin: boolean
+  isDeveloper: boolean
   isStaff: boolean
   role: StaffRole | null
   checkingSession: boolean
@@ -36,7 +37,7 @@ async function getCallerStaffInfo(): Promise<{ role: StaffRole } | null> {
 
 export async function isCallerAdmin() {
   const info = await getCallerStaffInfo()
-  return info?.role === 'admin'
+  return info?.role === 'admin' || info?.role === 'developer'
 }
 
 // Any active staff row (admin or staff role) — used to route a sign-in on
@@ -91,7 +92,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   return (
     <AdminContext.Provider
       value={{
-        isAdmin: role === 'admin',
+        isAdmin: role === 'admin' || role === 'developer',
+        isDeveloper: role === 'developer',
         isStaff: role !== null,
         role,
         checkingSession,

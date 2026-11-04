@@ -278,6 +278,21 @@ Added by [`010_staff_admin_safeguards.sql`](010_staff_admin_safeguards.sql) and 
   up" mode (calling `create_staff_account()` from `009_staff_self_service.sql`) still works without
   deploying anything, for anyone who'd rather self-serve at `/staff/signup`.
 
+## Developer role
+
+Added by [`026_developer_role.sql`](026_developer_role.sql). A third `staff.role`, `'developer'`, for
+whoever builds and maintains the system so they keep support access after handover:
+
+- **Same access as an admin** — `is_admin()` is true for `admin` and `developer`, so every admin RLS
+  policy and admin tab applies. `is_developer()` is the narrower check.
+- **`staff_protect_developer_role`** trigger — only a developer can insert a developer row, change a
+  role to or from `developer`, or delete a developer row. Admins can still deactivate/reactivate a
+  developer, so the shop owner can always switch support access off. Changes with no signed-in user
+  (SQL editor, `service_role`) skip the check — that's how the first developer is set, and
+  `create-staff-account` enforces the same rule itself.
+- Developers don't count toward the last-admin safeguard (010): the owner always keeps at least one
+  real `admin` of their own.
+
 ## Online checkout: online_orders, online_order_items, PayMongo
 
 Added by [`011_online_orders.sql`](011_online_orders.sql) plus two Edge Functions. Lets the web

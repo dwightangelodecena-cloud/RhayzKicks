@@ -65,11 +65,11 @@ export default function AdminTeam() {
   }, [loadSummary])
 
   const active = roster?.filter((r) => r.is_active) ?? []
-  const admins = active.filter((r) => r.role === 'admin').length
+  const admins = active.filter((r) => r.role !== 'staff').length
   const inactive = (roster?.length ?? 0) - active.length
 
   // Hour tiles count staff only — admins aren't on the hours sheet.
-  const adminIds = new Set((roster ?? []).filter((r) => r.role === 'admin').map((r) => r.id))
+  const adminIds = new Set((roster ?? []).filter((r) => r.role !== 'staff').map((r) => r.id))
   const staffShifts = (summaryShifts ?? []).filter((s) => !adminIds.has(s.staff_id))
   const weekStart = startOfWeekLocal()
   const openShifts = staffShifts.filter((s) => !s.clock_out)

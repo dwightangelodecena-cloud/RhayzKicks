@@ -153,9 +153,9 @@ export default function AdminStaffHours({
       return
     }
     const everyone = (staffRes.data ?? []) as StaffRow[]
-    const admins = new Set(everyone.filter((s) => s.role === 'admin').map((s) => s.id))
+    const admins = new Set(everyone.filter((s) => s.role !== 'staff').map((s) => s.id))
     setAdminIds(admins)
-    setStaff(everyone.filter((s) => s.role !== 'admin' && s.is_active))
+    setStaff(everyone.filter((s) => s.role === 'staff' && s.is_active))
     setShifts(((shiftsRes.data ?? []) as ShiftRow[]).filter((s) => !admins.has(s.staff_id)))
     setOpenShifts(((openRes.data ?? []) as ShiftRow[]).filter((s) => !admins.has(s.staff_id)))
     setLoading(false)
@@ -237,7 +237,7 @@ export default function AdminStaffHours({
   // Names for the person filter + "logged by" — roster (incl. deactivated)
   // when the parent provides it, otherwise the active-staff list.
   const people = useMemo(
-    () => (roster ?? staff).filter((p) => p.role !== 'admin' && !adminIds.has(p.id)),
+    () => (roster ?? staff).filter((p) => p.role === 'staff' && !adminIds.has(p.id)),
     [roster, staff, adminIds],
   )
   const nameOf = (id: string) => people.find((p) => p.id === id)?.full_name

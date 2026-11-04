@@ -10,7 +10,7 @@ class Staff {
   final String fullName;
   final String email;
   final String phone;
-  final String role; // staff | admin
+  final String role; // staff | admin | developer
   final String employeeId;
   final DateTime dateHired;
   final bool isActive;
@@ -28,7 +28,7 @@ class Staff {
     required this.createdAt,
   });
 
-  bool get isAdmin => role == 'admin';
+  bool get isAdmin => role == 'admin' || role == 'developer';
 
   factory Staff.fromMap(Map<String, dynamic> row) => Staff(
         id: row['id'] ?? '',

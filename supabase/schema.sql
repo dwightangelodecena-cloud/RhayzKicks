@@ -29,7 +29,7 @@ create table staff (
   full_name    text not null,
   email        text not null,
   phone        text not null default '',
-  role         text not null default 'staff' check (role in ('staff', 'admin')),
+  role         text not null default 'staff' check (role in ('staff', 'admin', 'developer')),
   employee_id  text not null default '',
   date_hired   date not null default current_date,
   is_active    boolean not null default true,

@@ -8,7 +8,7 @@ Future<bool> _isCallerStaffAdmin() async {
   try {
     final data = await Supabase.instance.client.from('staff').select('role, is_active').maybeSingle();
     if (data == null) return false;
-    return data['role'] == 'admin' && data['is_active'] == true;
+    return (data['role'] == 'admin' || data['role'] == 'developer') && data['is_active'] == true;
   } catch (_) {
     return false;
   }
